@@ -31,6 +31,30 @@ cartridge that still has the old ones is *not migrated*, which `coherence.py` re
 as missing. A project directory with no
 `nexus/` is an incomplete creation, and `build-nexus` reports it whoever made it.
 
+**0a. Is there a parent?** ⛔ **Ask before step 0, because the answer changes the path.** A child
+of a superproject is created at `<super>/<child>/nexus/`, not at the projects root — and a child
+written one level up is a sibling, which is the same mistake step 0 exists against one floor higher.
+
+**The occasion for a parent is `AX-39`'s, not a feeling of relatedness**: a boundary is drawn **by
+owner first, rate of change second — never by topic**. Projects that share a subject are siblings.
+What makes a parent is **a rule that binds every child** — and `METHOD.md` says a parent with no
+axiom of its own is not a parent, it is a folder.
+
+**If there is a parent, read its `axioms.md` first and write none of its rules again.** ⛔ A child
+that restates its parent's axiom creates a duplicate with no winner (`AX-20`), and the copy stays
+readable as current for exactly as long as nobody compares the two. **Cite it instead**:
+`<parent>:AX-n`. The check is one line and it belongs in the close, not in the memory:
+
+```bash
+# from the projects root — must print nothing
+comm -12 <(grep -oE 'AX-[0-9]+' <super>/nexus/axioms.md | sort -u) \
+         <(grep -oE 'AX-[0-9]+' <super>/<child>/nexus/axioms.md | sort -u)
+```
+
+⚠️ **Do not create a parent to hold one child.** The layer costs a level of indirection in every
+path, every citation and every reader; one child does not pay for it. Open the project flat, and
+promote it to a parent when the second one arrives and something binds them both.
+
 **0b. Read the finished projects before writing a rule.** ⛔ **A project opened without reading the
 others repeats their mistakes and loses their wins**, and it is measurable: **276 decision records in
 the store, 67 with a non-empty `discarded`, and a project opened today reads 0.** It has already cost
