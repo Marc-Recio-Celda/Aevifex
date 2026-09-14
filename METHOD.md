@@ -309,42 +309,6 @@ decision is a park entry with the project's tag — not a second bibliography no
 
 No mailbox, no task list, no ideas file: those are central now.
 
-### When a project holds projects — the superproject
-
-**A grouping folder that owns a cartridge.** The projects root already has a grouping level — the
-optional segment in the declared project pattern — and in most instances it is **empty**: a folder
-with projects under it and no files of its own. A superproject is that same level **with a `nexus/`
-of its own**.
-
-```
-98_PROJECTS/<super>/
-├── nexus/                    the superproject's own cartridge
-├── <child>/nexus/            a child, a project like any other
-└── <child>/nexus/
-```
-
-⛔ **It adds no depth and it is not a new kind.** The declared project pattern —
-`98_PROJECTS/(?:<lab>/)?<project>/nexus/`, in the instance's adapter — already reads both rows, so
-nothing that consumes it changes. And **a superproject *is* a project**, which is what keeps
-`AGENTS.md` §5's *every axiom sits in exactly one tier* true without inventing a fourth.
-
-⚠️ **The occasion is not *these are related*.** `AX-39` draws a boundary **by owner first, rate of
-change second — never by topic**. Projects that merely share a subject matter are siblings, and
-grouping them buys a folder and costs a level of indirection.
-
-**What sits where — one fact, one home** (`AX-20`, applied rather than extended):
-
-| | Parent | Child | |
-|---|---|---|---|
-| `definition.md` · `objectives.md` | ✅ | ✅ | different things: the network, and the door into it |
-| `plan.md` | ✅ | ✅ | ⛔ **a block lives in exactly one of them.** The parent holds what no child owns; when a parent block *is* a whole child, it **names** the child's sheet rather than restating its rows — the shape `WALL.md` already uses |
-| `axioms.md` | ✅ | ✅ own only | ⛔ **a child never restates a parent's axiom.** A rule copied into two files is a duplicate with no winner |
-| `Decision_Log.md` | ✅ | ✅ | a decision binding every child is the parent's; one that binds a single child is that child's, citing the parent's |
-| `LOG_AGENTS.md` | ✅ | ✅ | ⚠️ **Record, append-only, and it is never split.** The parent's stays whole as history; a child opened later starts its own |
-
-⛔ **The parent's axioms are what makes the grouping worth the folder.** If nothing binds every
-child, there is no parent — there are siblings that share a prefix.
-
 ### And a project may have skills of its own — it usually should
 
 A skill is hosted at **the level of the least general thing it names**, applied one floor down. A
