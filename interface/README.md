@@ -42,9 +42,17 @@ Prebuilt rendering libraries, fonts, licences and checksums live in `vendor/`. T
 bundler or dependency installation. Mermaid loads on demand. Raw source HTML stays text; TeX
 trust is disabled and Mermaid uses strict security.
 
+The mailbox opens pending matters as a title list, with resolved/archived matters in a separate
+archive. Project and text filters preserve source order. Each exact-id route opens one matter,
+links to its project and retains the complete original body. A single explicit request field
+in English or Spanish is shown first; ambiguous fields and unstructured prose keep their source
+order. No mailbox state or source file is modified by the web. Query drafts, focus, disclosures
+and reading positions survive live refresh; unrelated changes do not replace the mailbox DOM.
+
 Checks, run from the repository root:
 
 ```sh
+node interface/tests/mailbox.mjs
 python3 interface/tests/library.py
 node interface/tests/library.mjs
 bash interface/tests/traversal.sh

@@ -25,10 +25,7 @@ let STATE = {
   currentView: "cockpit",
   selectedProject: "",
   selectedSubtab: "overview",
-  selectedTaskFilter: "ALL",
   taskFilterProj: "",
-  taskFilterStatus: "",
-  taskDateSort: "newest",
   taskSearch: "",
   activeCsTab: "session",
   globalSearchQuery: ""
@@ -787,10 +784,8 @@ function renderView() {
   }
 
   main.dataset.route = route;
-  if (STATE.currentView === 'inbox') {
-    const projectFilter = document.getElementById('projectFilter');
-    if (projectFilter) projectFilter.value = mailboxLocation().project || 'ALL';
-  }
+  const sidebarFilter = document.getElementById('projectFilter')?.closest('.filter-group');
+  if (sidebarFilter) sidebarFilter.style.display = STATE.currentView === 'inbox' ? 'none' : '';
   openDetails.forEach(id => { const node = document.getElementById(id); if (node) node.open = true; });
   main.dataset.readerReady = String(Boolean(main.querySelector(".project-page, .project-file-index, .library-browser, .mailbox-room")));
   Object.entries(savedReading?.details || {}).forEach(([id, open]) => {
@@ -3198,9 +3193,12 @@ window.mailboxSearch = function(event) {
 };
 function renderInbox(container) {
   const loc = mailboxLocation(), all = STATE.mailbox || [];
-  const signature = JSON.stringify([loc,all,STATE.projects.map(p=>p.name),STATE.libraryRevision]);
+  const catalog = loc.id ? (STATE.tree?.files || []).map(f=>[f.root,f.path,f.aliases]) : null;
+  const signature = JSON.stringify([loc,all,STATE.projects.map(p=>p.name),catalog]);
   if (container.dataset.mailboxSignature === signature && container.querySelector('.mailbox-room')) return;
   container.dataset.mailboxSignature = signature;
+  const queryInput = container.dataset.route === Mailbox.route(loc) && container.querySelector('#mailbox-query');
+  const draft = queryInput ? {value:queryInput.value, focused:document.activeElement === queryInput, start:queryInput.selectionStart, end:queryInput.selectionEnd} : null;
   const pending = all.filter(Mailbox.isPending).length, archive = all.length-pending;
   const shown = Mailbox.filter(all,loc), archiveView = loc.view === 'archive';
   const base = {...loc,id:''};
@@ -3242,6 +3240,11 @@ function renderInbox(container) {
       <div class="mailbox-list">${shown.length ? shown.map(e=>`<a class="mailbox-row" href="${esc(Mailbox.route({...base,id:e.id}))}"><div class="mailbox-meta"><span>${esc(e.project)}</span><span>${esc(e.date || 'Sin fecha')}</span>${e.state !== 'open' ? `<span>${esc(Mailbox.state(e).label)}</span>` : ''}</div><h3>${esc(e.title)}</h3><span class="mailbox-open">Leer asunto <span aria-hidden="true">→</span></span></a>`).join('') : `<div class="mailbox-empty"><h3>${loc.q || loc.project ? 'No hay asuntos con estos filtros' : archiveView ? 'El archivo está vacío' : 'No hay asuntos pendientes'}</h3><p>${loc.q || loc.project ? 'Prueba otro texto o consulta todos los proyectos.' : archiveView ? 'Aquí podrás consultar los asuntos resueltos y archivados.' : 'Puedes volver a la Oficina para continuar con tus tareas.'}</p></div>`}</div>`;
   }
   container.innerHTML = `<section class="mailbox-room">${content}</section>`;
+  const restoredInput = container.querySelector('#mailbox-query');
+  if (draft && restoredInput) {
+    restoredInput.value = draft.value;
+    if (draft.focused) { restoredInput.focus({preventScroll:true}); restoredInput.setSelectionRange(draft.start,draft.end); }
+  }
   container.querySelectorAll('.note-unresolved').forEach(link=>link.addEventListener('click',event=>{
     event.preventDefault();
     const details = container.querySelector('#mailbox-references');

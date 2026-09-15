@@ -35,8 +35,8 @@
         const match = /^\*\*([^*\n]+)\*\*\s*[—:–]?\s*/.exec(line);
         if (match) {
           const label = normalize(match[1]).replace(/[.:]$/, '').trim();
-          const asks = /^(asks|why it needs .+|que se decide|que necesitas decidir|peticion)$/.test(label);
-          if (asks || /^(serves|what|affects|description|what is happening|what it affects)$/.test(label)) fields.push({asks, start:offset, content:offset+match[0].length});
+          const asks = /^(asks|why it needs .+|por que necesita .+|lo que hay que decidir|que se decide|que necesitas decidir|peticion)$/.test(label);
+          if (asks || /^(serves|what|affects|description|what is happening|what it affects|descripcion|que pasa|que ocurre|que afecta|a que afecta)$/.test(label)) fields.push({asks, start:offset, content:offset+match[0].length});
         }
       }
       offset += line.length + 1;
