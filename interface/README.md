@@ -63,11 +63,19 @@ results. The reader keeps source prose and the original Markdown, follows Notebo
 the room and relocates search highlights after a source edit. A removed query or sheet is stated
 explicitly. Capture, editing and triage remain outside the read-only web.
 
+Quick references live in context, not in a second built-in command catalog. The adapter's
+optional `references.links` maps contexts (`office`, `mailbox`, `library`, `notebook`, or
+`project:<name>`) to `{label, href}` entries. Only internal reader routes are accepted. A
+`references.legacy` map redirects former `#/cheatsheet?tab=...` bookmarks to their current owner;
+an unknown tab uses `default`, or the Library when no valid destination is declared. Historical
+reference documents stay visibly historical; they do not become current operating instructions.
+
 Checks, run from the repository root:
 
 ```sh
 python3 interface/tests/notebook.py
 node interface/tests/notebook.mjs
+node interface/tests/references.mjs
 node interface/tests/mailbox.mjs
 python3 interface/tests/library.py
 node interface/tests/library.mjs

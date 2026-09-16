@@ -27,7 +27,6 @@ let STATE = {
   selectedSubtab: "overview",
   taskFilterProj: "",
   taskSearch: "",
-  activeCsTab: "session",
   globalSearchQuery: ""
 };
 
@@ -88,83 +87,6 @@ function renderOrigin(originStr, isInferred = false) {
   }
   return `<span class="tag-pill">👤 ${esc(originStr)}</span>`;
 }
-
-// Built-in static cheatsheet commands for developer ergonomic speed
-const CHEATSHEET_DATA = [
-  {
-    category: "session",
-    catLabel: "Session ⭐",
-    groups: [
-      {
-        title: "Session Lifecycle (Canonical Loop)",
-        desc: "The canonical Aevifex method loop: Open -> Orient -> Execute -> Close -> Audit.",
-        cmds: [
-          { label: "Open session", code: "claude -p 'open a session: read COMPASS.md, report the active front, and ask if we work it'", hint: "Prompt" },
-          { label: "Close task cleanly", code: "claude -p 'close this task: strike each item in PLAN.md with its destination, update state, close the plan, and run company-auditor'", hint: "Prompt" },
-          { label: "Audit working tree", code: "claude -p 'run the company-auditor over everything touched in this task'", hint: "Prompt" }
-        ]
-      },
-      {
-        title: "Quick Status & Verification",
-        desc: "Verify workspace integrity and release allowlist in seconds.",
-        cmds: [
-          { label: "Check git status", code: "git status -s && git branch -vv", hint: "Shell" },
-          { label: "Run the gate", code: "bash tools/gate.sh --denylist <the instance's denylist>", hint: "Shell*" },
-          { label: "Axiom citations resolve", code: "bash tools/axiom-refs.sh AXIOMS.md Aevifex $(git ls-files)", hint: "Shell" },
-          { label: "Clause citations resolve", code: "bash tools/clause-refs.sh PHILOSOPHY.md $(git ls-files)", hint: "Shell" },
-          { label: "Roles have log and criterion", code: "bash tools/roles-check.sh --skills skills --logs <the instance's logs dir>", hint: "Shell*" },
-          { label: "Same prose in two files", code: "bash tools/dup-prose.sh PHILOSOPHY.md AXIOMS.md AGENTS.md METHOD.md FLOW.md", hint: "Shell" },
-          { label: "Every check test", code: "bash tools/tests/run.sh", hint: "Shell" },
-          { label: "Model parses, nothing dropped", code: "python3 interface/model/parse.py --adapter <the instance's adapter>", hint: "Shell*" }
-        ]
-      }
-    ]
-  },
-  {
-    category: "operations",
-    catLabel: "Operations Core",
-    groups: [
-      {
-        title: "Operations & Queues",
-        desc: "Interact with queues, decision log and project states.",
-        cmds: [
-          { label: "Triage mailbox", code: "claude -p 'triage the mailbox and route each entry to its destination'", hint: "Prompt" },
-          { label: "Park new idea", code: "claude -p 'park this idea in IDEAS under the right section'", hint: "Prompt" }
-        ]
-      }
-    ]
-  },
-  {
-    category: "git",
-    catLabel: "Git & Worktrees",
-    groups: [
-      {
-        title: "Worktree Management",
-        desc: "Safely isolate agent contexts across branch worktrees.",
-        cmds: [
-          { label: "List active worktrees", code: "git worktree list", hint: "Shell" },
-          { label: "Prune stale worktrees", code: "git worktree prune", hint: "Shell" },
-          { label: "Create fresh task worktree", code: "git worktree add .claude/worktrees/task-run -b task/run", hint: "Shell" }
-        ]
-      }
-    ]
-  },
-  {
-    category: "claude",
-    catLabel: "Claude Code",
-    groups: [
-      {
-        title: "Autonomous Skills & Invocation",
-        desc: "Trigger high-order capabilities.",
-        cmds: [
-          { label: "Autonomous run", code: "claude -p 'execute autonomous-run: objective: \"<describe>\"'", hint: "Prompt" },
-          { label: "Redefine drifted project", code: "claude -p 'run redefine-project on <project-name>'", hint: "Prompt" },
-          { label: "Run R&D session", code: "claude -p 'run rnd on the current decision bottleneck'", hint: "Prompt" }
-        ]
-      }
-    ]
-  }
-];
 
 // Helper to generate dynamic ramified project block workflows from real project state & decisions
 function generateProjectRamifiedWorkflow(pName, decCount, pState, projectTasks = [], projectDecs = []) {
@@ -501,7 +423,7 @@ function updateHUD() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function syncUrlHash() {
-  if (!STATE.loaded) return;
+  if (!STATE.loaded || STATE.currentView === "reference-redirect") return;
   let hash = "";
   const view = STATE.currentView || "overview";
 
@@ -532,11 +454,6 @@ function syncUrlHash() {
       params.push(`estado=${encodeURIComponent(STATE.officeFilterState)}`);
     }
     if (params.length) hash += `?${params.join("&")}`;
-  } else if (view === "cheatsheet") {
-    hash = `#/cheatsheet`;
-    if (STATE.activeCsTab && STATE.activeCsTab !== "session") {
-      hash += `?tab=${encodeURIComponent(STATE.activeCsTab)}`;
-    }
   } else if (view === "skills") {
     hash = `#/skills`;
     if (STATE.skillFilterType && STATE.skillFilterType !== "ALL") {
@@ -615,10 +532,8 @@ function restoreRouteFromUrl() {
     STATE.officeFilterProj = params.get("proyecto") || "ALL";
     STATE.officeFilterState = params.get("estado") || "active";
   } else if (mainView === "cheatsheet") {
-    STATE.currentView = "cheatsheet";
-    if (params.has("tab")) {
-      STATE.activeCsTab = decodeURIComponent(params.get("tab"));
-    }
+    STATE.currentView = "reference-redirect";
+    STATE.legacyReference = params.get("tab") || "session";
   } else if (mainView === "skills") {
     STATE.currentView = "skills";
     if (params.has("filter")) {
@@ -660,6 +575,7 @@ window.addEventListener("popstate", () => {
 
 window.navigateTo = function(viewName) {
   if (viewName === "ideas") viewName = "notebook";
+  if (viewName === "cheatsheet") {viewName="reference-redirect";STATE.legacyReference="session";}
   if (STATE.currentView !== viewName) history.pushState(null, "", `#/${viewName}`);
   STATE.currentView = viewName;
   if (viewName === "inbox") STATE.mailLocation = Mailbox.location(new URLSearchParams());
@@ -764,6 +680,12 @@ function renderView() {
     return;
   }
 
+  if (STATE.currentView === 'reference-redirect') {
+    if (!STATE.tree) {main.innerHTML='<p role="status">Buscando la referencia…</p>';return;}
+    history.replaceState(null,'',References.redirect(STATE.tree.references,STATE.legacyReference));
+    restoreRouteFromUrl();
+  }
+
   const route = STATE.currentView === "desk" ? `desk/${STATE.deskCardId}` : STATE.currentView === "project-detail"
     ? projectRoute(STATE.selectedProject, STATE.projectSubtab, STATE.projectFile) : STATE.currentView === "library" ? Library.route({...libraryLocation(), anchor:""}) : STATE.currentView === "notebook" ? Notebook.route({...notebookLocation(),anchor:""}) : STATE.currentView === "inbox" ? Mailbox.route(mailboxLocation()) : STATE.currentView;
   rememberProjectReading(main);
@@ -783,7 +705,6 @@ function renderView() {
     case "doc": renderDoc(main); break;
     case "dashboard": renderDashboard(main); break;
     case "skill": renderSkillPage(main); break;
-    case "cheatsheet": renderCheatSheet(main); break;
     case "inbox": renderInbox(main); break;
     case "notebook": renderNotebook(main); break;
     case "skills": renderSkills(main); break;
@@ -941,7 +862,7 @@ function renderOverview(container) {
               ["skills", "🏺", "Ágora", "Las skills, agrupadas por cómo las alcanza el modelo.", `${STATE.skills.length} skills`],
               ["projects", "🚀", "Projects Hub", "Cada proyecto, un cartucho soberano con su propio ciclo de vida — su definición, sus objetivos, su plan, sus axiomas y <strong>su registro de decisiones</strong>.", `${STATE.projects.length} proyectos · ${liveDecisions().length} decisiones vivas`],
               ["notebook", "🗒️", "Notebook", "Tus notas e ideas, reunidas por proyecto.", `${Notebook.files(STATE.tree).length} documentos`],
-              ["cheatsheet", "📖", "CheatSheet", "Los comandos, listos para copiar.", "⭐"]
+
             ].map(([view, icon, title, desc, tag]) => `
               <div class="eco-card-doc" onclick="navigateTo('${view}')">
                 <div class="eco-card-head"><span class="eco-icon">${icon}</span><h3>${title}</h3></div>
@@ -1674,6 +1595,7 @@ function renderProjectDetailPage(container) {
         <details id="project-more"><summary>Más</summary><div>${[["definition", "Definición"], ["axioms", "Reglas"], ["decisions", "Decisiones"], ["log", "Registro de trabajo"]].map(([key, label]) => `<a href="${esc(projectRoute(project.name, key))}">${label}</a>`).join("")}</div></details>
       </nav>
     </div>
+    ${referenceLinks("project:"+project.name)}
     ${content}
   </section>`;
   // The outline is tied to visible headings, not a guessed source summary.
@@ -3013,65 +2935,9 @@ async function loadModel() {
   loadRecent();
 }
 
-function renderCheatSheet(container) {
-  const curCat = STATE.activeCsTab || "session";
-  const catData = CHEATSHEET_DATA.find(c => c.category === curCat) || CHEATSHEET_DATA[0];
-
-  container.innerHTML = `
-    <div class="view-header">
-      <div class="view-title-group">
-        <h1><span>📖</span> CheatSheet & Atajos Rápidos ⭐</h1>
-        <p class="view-subtitle">
-          Comandos para copiar de un clic. <span class="cs-key"><span class="cs-hint hint-Shell">Shell</span>
-          va a la terminal</span> · <span class="cs-key"><span class="cs-hint hint-Prompt">Prompt</span>
-          va a Claude</span> · <span class="cs-key"><span class="cs-hint hint-Shell2">Shell*</span>
-          necesita una ruta que sólo tu instancia conoce — sustitúyela antes de ejecutar</span>
-        </p>
-      </div>
-    </div>
-
-    <div class="cheatsheet-container">
-      <div class="cheatsheet-toolbar">
-        <div class="cs-tabs">
-          ${CHEATSHEET_DATA.map(c => `
-            <button class="cs-tab-btn ${c.category === curCat ? 'active' : ''}" onclick="selectCsTab('${c.category}')">
-              ${esc(c.catLabel)}
-            </button>
-          `).join("")}
-        </div>
-      </div>
-
-      <div class="cs-groups-grid">
-        ${catData.groups.map((g, gIdx) => `
-          <div class="cs-group-card">
-            <div class="cs-group-header">
-              <h3>${esc(g.title)}</h3>
-              <p>${esc(g.desc)}</p>
-            </div>
-            <div style="display: flex; flex-direction: column; gap: 8px;">
-              ${g.cmds.map((cmd, cIdx) => {
-                // ⚠️ El id llevaba sólo el índice DENTRO del grupo, así que dos grupos de la
-                // misma pestaña generaban `cmdRow_session_0` dos veces — y el aviso de
-                // «copiado» se encendía en la primera fila con ese id, no en la pulsada.
-                const rowId = `cmdRow_${curCat}_${gIdx}_${cIdx}`;
-                // ⛔ El `hint` existía en los datos y no se pintaba en ningún sitio, así que
-                // no había manera de saber si un comando va a la terminal o a Claude. Un
-                // prompt pegado en bash no hace nada y no dice por qué.
-                const kind = cmd.hint === "Prompt" ? "Prompt" : cmd.hint === "Shell*" ? "Shell2" : "Shell";
-                return `
-                <div class="cs-cmd-row" id="${rowId}" data-code="${esc(cmd.code)}" onclick="copyRowCommand(this)">
-                  <span class="cs-cmd-label">${esc(cmd.label)}</span>
-                  <span class="cs-hint hint-${kind}">${esc(cmd.hint || "Shell")}</span>
-                  <code class="cs-cmd-code">${esc(cmd.code)}</code>
-                  <button class="cs-cmd-copy-btn">Copiar 📋</button>
-                </div>`;
-              }).join("")}
-            </div>
-          </div>
-        `).join("")}
-      </div>
-    </div>
-  `;
+function referenceLinks(context, title='Guías y referencias') {
+  const links=References.links(STATE.tree?.references,context);
+  return links.length ? `<details class="context-references"><summary>${esc(title)}</summary><nav aria-label="${esc(title)}">${links.map(item=>`<a href="${esc(item.href)}">${esc(item.label)}</a>`).join('')}</nav></details>` : '';
 }
 
 // Helper to find persistent plan associated with a compass front
@@ -3217,7 +3083,7 @@ function renderNotebook(container) {
     const shown=groups.filter(g=>!loc.folder || g.path===loc.folder);
     body=`<div class="notebook-groups">${shown.map(g=>`<section class="notebook-group"><header><div>${g.context?`<small>${esc(g.context)}</small>`:''}<h2>${esc(g.label)}</h2></div><span>${g.files.length} ${g.files.length===1?'hoja':'hojas'}</span></header>${g.description?`<p>${esc(g.description)}</p>`:''}<div>${g.files.map(f=>`<a class="notebook-sheet" href="${esc(Notebook.route({...loc,path:f.path}))}"><strong>${esc(Notebook.label(f,config))}</strong><span aria-hidden="true">↗</span></a>`).join('')}</div></section>`).join('')}</div>${!shown.length?'<p>No hay hojas en este grupo.</p>':''}`;
   }
-  container.innerHTML=`<section class="notebook-browser">${header}${body}</section>`;
+  container.innerHTML=`<section class="notebook-browser">${header}${referenceLinks("notebook")}${body}</section>`;
   if(draft) {const input=container.querySelector('#notebook-query');input.value=draft.value;if(draft.focused){input.focus({preventScroll:true});input.setSelectionRange(draft.start,draft.end);}}
   container.querySelectorAll('[data-reference]').forEach(link=>link.addEventListener('click',event=>{
     event.preventDefault();const details=container.querySelector('#library-references');if(details){details.open=true;container.querySelector(`#library-reference-${link.dataset.reference}`)?.scrollIntoView({block:'center'});}
@@ -3302,7 +3168,7 @@ function renderInbox(container) {
       ${staleBanner(all, 'entradas')}
       <div class="mailbox-list">${shown.length ? shown.map(e=>`<a class="mailbox-row" href="${esc(Mailbox.route({...base,id:e.id}))}"><div class="mailbox-meta"><span>${esc(e.project)}</span><span>${esc(e.date || 'Sin fecha')}</span>${e.state !== 'open' ? `<span>${esc(Mailbox.state(e).label)}</span>` : ''}</div><h3>${esc(e.title)}</h3><span class="mailbox-open">Leer asunto <span aria-hidden="true">→</span></span></a>`).join('') : `<div class="mailbox-empty"><h3>${loc.q || loc.project ? 'No hay asuntos con estos filtros' : archiveView ? 'El archivo está vacío' : 'No hay asuntos pendientes'}</h3><p>${loc.q || loc.project ? 'Prueba otro texto o consulta todos los proyectos.' : archiveView ? 'Aquí podrás consultar los asuntos resueltos y archivados.' : 'Puedes volver a la Oficina para continuar con tus tareas.'}</p></div>`}</div>`;
   }
-  container.innerHTML = `<section class="mailbox-room">${content}</section>`;
+  container.innerHTML = `<section class="mailbox-room">${content}${referenceLinks('mailbox')}</section>`;
   const restoredInput = container.querySelector('#mailbox-query');
   if (draft && restoredInput) {
     restoredInput.value = draft.value;
@@ -3790,12 +3656,6 @@ function classifySkill(s) {
   };
 }
 
-window.copyRowCommand = function(el) {
-  const code = el.getAttribute("data-code") || el.querySelector("code")?.textContent || "";
-  if (!code) return;
-  copyCommand(code, el.id);
-};
-
 // ⚠️ The two project selects were `<!-- populated dynamically -->` and nothing populated
 // them, so both modals submitted an empty `project` — the one field `AX-24` and every
 // filter in this interface depend on, and the one nothing else can infer.
@@ -3819,11 +3679,6 @@ function fillProjectSelect(id) {
 }
 
 
-window.selectCsTab = function(cat) {
-  STATE.activeCsTab = cat;
-  renderView();
-};
-
 window.updateSkillFilter = function(type) {
   STATE.skillFilterType = type;
   renderView();
@@ -3832,19 +3687,6 @@ window.updateSkillFilter = function(type) {
 window.updateSkillSearch = function(q) {
   STATE.skillSearch = q;
   renderView();
-};
-
-window.copyCommand = function(text, elementId) {
-  navigator.clipboard.writeText(text).then(() => {
-    const el = document.getElementById(elementId);
-    if (el) {
-      el.classList.add("copied");
-      setTimeout(() => el.classList.remove("copied"), 1200);
-    }
-    showToast(`Comando copiado al portapapeles: ${text.slice(0, 40)}...`);
-  }).catch(() => {
-    showToast(`Comando copiado: ${text.slice(0, 40)}...`);
-  });
 };
 
 window.retryLoad = () => {
@@ -4112,6 +3954,7 @@ function renderOffice(container) {
           </select>
         </label>
       </div>
+      ${referenceLinks("office","Cómo trabajar")}
       <div class="quiet-wall">
         ${shown.length ? shown.map(c => `<a class="quiet-task" href="#/desk/${encodeURIComponent(c.id)}">
           <div class="quiet-task-meta"><span>${esc(c.project)}</span><span>${STATE_META[cardState(c)]?.label || esc(cardState(c))}</span></div>
@@ -5021,7 +4864,7 @@ function renderLibrary(container) {
   if (loc.path) body = renderNote();
   else if (loc.q) body = renderSearchHits();
   else if (loc.root) body = renderShelf(loc.root);
-  else body = `<div class="library-intro"><h2>¿Qué quieres consultar?</h2><p>Elige una sección y después un tema, o busca directamente un documento.</p></div>
+  else body = `${referenceLinks("library")}<div class="library-intro"><h2>¿Qué quieres consultar?</h2><p>Elige una sección y después un tema, o busca directamente un documento.</p></div>
     <div class="library-sections">${sections.map(s => {
       const fs = libFiles(s.root), group = Library.groups(fs, s.root);
       const preview = group.folders.map(f => folderLabel(f.name)).slice(0, 3).join(' · ');

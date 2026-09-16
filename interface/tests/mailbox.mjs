@@ -47,7 +47,7 @@ const escape = require('../render/escape.js');
 globalThis.markdownit = require('../vendor/markdown-it/markdown-it.umd.min.js');
 globalThis.katex = require('../vendor/katex/katex.min.js');
 const Library = require('../render/library.js');
-const context = vm.createContext({STATE:{mailbox:entries,projects:[],tasks:[{title:'TASK-MUST-NOT-APPEAR'}]},Mailbox:M,Library,...escape,window:{},staleBanner:()=>'',enhanceLibraryDiagrams:()=>{}});
+const context = vm.createContext({STATE:{mailbox:entries,projects:[],tasks:[{title:'TASK-MUST-NOT-APPEAR'}]},Mailbox:M,Library,...escape,window:{},staleBanner:()=>'',referenceLinks:()=>'',enhanceLibraryDiagrams:()=>{}});
 vm.runInContext(app.slice(app.indexOf('function mailboxLocation()'),app.indexOf('// ═',app.indexOf('function mailboxLocation()'))),context);
 const container = {dataset:{},innerHTML:'',querySelectorAll:()=>[],querySelector:()=>null};
 context.container=container;

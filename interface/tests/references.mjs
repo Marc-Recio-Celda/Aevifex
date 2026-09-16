@@ -1,0 +1,21 @@
+// Run from the repository root: node interface/tests/references.mjs
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+import fs from 'node:fs';
+import vm from 'node:vm';
+const require=createRequire(import.meta.url),R=require('../render/references.js');
+const config={links:{office:[{label:'Guide <unsafe>',href:'#/skill/open-session'},{label:'Bad',href:'javascript:alert(1)'},{label:'Loop',href:'#/cheatsheet'}]},legacy:{session:'#/cockpit',git:'#/library?root=tools&note=git.md',default:'#/library?root=tools'}};
+assert.equal(R.links(config,'office').length,1);
+assert.deepEqual(R.links({},'office'),[]);
+assert.equal(R.redirect(config,'git'),'#/library?root=tools&note=git.md');
+assert.equal(R.redirect(config,'unknown'),'#/library?root=tools');
+assert.equal(R.redirect({legacy:{default:'#/cheatsheet'}}),'#/library','No redirect loops');
+assert.equal(R.valid('https://elsewhere.test'),false,'Only declared internal destinations');
+const source=fs.readFileSync(new URL('../app.js',import.meta.url),'utf8');
+const ctx=vm.createContext({STATE:{tree:{references:config}},References:R,esc:require('../render/escape.js').esc});
+vm.runInContext(source.slice(source.indexOf('function referenceLinks('),source.indexOf('// Helper to find persistent plan')),ctx);
+const html=vm.runInContext("referenceLinks('office','Help')",ctx);
+assert.match(html,/Guide &lt;unsafe&gt;/);assert.doesNotMatch(html,/javascript:|cheatsheet/);
+assert.doesNotMatch(source,/CHEATSHEET_DATA|function renderCheatSheet/,'No second command authority remains');
+assert.doesNotMatch(fs.readFileSync(new URL('../index.html',import.meta.url),'utf8'),/data-view="cheatsheet"/);
+console.log('Contextual references: safe internal destinations, exact legacy routes, escaping and retired catalog pass.');

@@ -101,6 +101,7 @@ def load_adapter(path):
         "browse": data.get("browse") or [],
         "library": data.get("library") or {},
         "notebook": data.get("notebook") or {},
+        "references": data.get("references") or {},
         "path": str(p)
     }
 
@@ -239,7 +240,8 @@ def tree(adapter):
             except OSError:
                 continue
     return {"available": True, "roots": [name for name, _ in scopes],
-            "sections": _library_sections(adapter), "notebook": _notebook_metadata(adapter), "files": files}
+            "sections": _library_sections(adapter), "notebook": _notebook_metadata(adapter),
+            "references": adapter.get("references") or {}, "files": files}
 
 
 def read_file(adapter, rel, root=None):

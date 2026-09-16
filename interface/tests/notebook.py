@@ -28,7 +28,10 @@ class Notebook(unittest.TestCase):
         self.adapter_file.write_text(json.dumps(self.config))
         self.adapter=server.load_adapter(self.adapter_file)
     def test_metadata_is_explicit_and_contained(self):
+        self.config['references']={'links':{'office':[{'label':'Guide','href':'#/skill/open-session'}]}}
+        self.save()
         catalog=server.tree(self.adapter)
+        self.assertEqual(catalog['references'],self.config['references'])
         self.assertEqual(catalog['notebook']['root'],'capture')
         self.assertTrue(catalog['notebook']['available'])
         self.assertEqual(len([f for f in catalog['files'] if f['root']=='capture']),2)

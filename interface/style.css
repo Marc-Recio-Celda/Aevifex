@@ -2185,137 +2185,6 @@ body {
 }
 
 /* ==========================================================================
-   CHEATSHEET INTEGRATION
-   ========================================================================== */
-.cheatsheet-container {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.cheatsheet-toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-  background: var(--paper-card);
-  padding: 12px 18px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--line);
-  box-shadow: var(--shadow-sm);
-}
-
-.cs-tabs {
-  display: flex;
-  gap: 6px;
-  overflow-x: auto;
-}
-
-.cs-tab-btn {
-  background: transparent;
-  border: 1px solid transparent;
-  color: var(--ink-soft);
-  font-size: 12.5px;
-  font-weight: 600;
-  padding: 6px 12px;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: all 0.15s;
-  white-space: nowrap;
-}
-
-.cs-tab-btn:hover {
-  color: var(--ink);
-  background: var(--paper-subtle);
-}
-
-.cs-tab-btn.active {
-  background: var(--vine);
-  color: #ffffff;
-  font-weight: 700;
-}
-
-.cs-groups-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 16px;
-}
-
-.cs-group-card {
-  background: var(--paper-card);
-  border: 1px solid var(--line);
-  border-left: 4px solid var(--vine);
-  border-radius: var(--radius-md);
-  padding: 18px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  box-shadow: var(--shadow-sm);
-}
-
-.cs-group-header h3 {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--ink);
-}
-
-.cs-group-header p {
-  font-size: 12.5px;
-  color: var(--ink-soft);
-  margin-top: 3px;
-}
-
-.cs-cmd-row {
-  display: flex;
-  align-items: center;
-  background: var(--paper);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  padding: 8px 12px;
-  gap: 12px;
-  transition: all 0.15s;
-  cursor: pointer;
-}
-
-.cs-cmd-row:hover {
-  background: var(--paper-subtle);
-  border-color: var(--line-strong);
-}
-
-.cs-cmd-row.copied {
-  border-color: var(--vine);
-  background: var(--vine-bg);
-}
-
-.cs-cmd-label {
-  flex: 0 0 220px;
-  font-size: 12.5px;
-  color: var(--ink-soft);
-  font-weight: 600;
-}
-
-.cs-cmd-code {
-  flex: 1;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--ink);
-  background: var(--paper-code);
-  padding: 4px 8px;
-  border-radius: 4px;
-  overflow-x: auto;
-}
-
-.cs-cmd-copy-btn {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--ink-muted);
-  background: var(--paper-subtle);
-  border: 1px solid var(--line);
-  padding: 3px 8px;
-  border-radius: 4px;
-}
-
-/* ==========================================================================
    TICKETS, TASK ACTIONS & COMMENTS
    ========================================================================== */
 .tickets-list {
@@ -5998,18 +5867,6 @@ input[type="text"]:focus, textarea:focus {
 .progress-none strong { color: var(--ink-soft); }
 .empty-hint { font-size: 12.5px; line-height: 1.6; color: var(--ink-muted); max-width: 560px; margin: 8px auto 0; }
 
-/* Un comando no dice solo lo que hace: dice dónde se pega. Sin esta marca un prompt
-   pegado en bash no hace nada y no explica por qué. */
-.cs-hint {
-  flex: 0 0 auto; font-size: 9.5px; font-weight: 700; letter-spacing: .06em;
-  text-transform: uppercase; padding: 2px 7px; border-radius: var(--radius-full);
-  border: 1px solid currentColor; white-space: nowrap;
-}
-.hint-Shell  { color: var(--vine-deep);   background: var(--vine-bg); }
-.hint-Shell2 { color: var(--gold-deep);   background: var(--gold-bg); }
-.hint-Prompt { color: var(--grape);       background: var(--grape-bg); }
-.cs-key { display: inline-flex; align-items: center; gap: 5px; margin-right: 4px; }
-
 /* Una hoja que no es la viva se lee, no se escribe. El cartel lo dice antes de que alguien
    busque los botones de enrutado y no los encuentre. */
 .sheet-banner {
@@ -6775,3 +6632,7 @@ input[type="text"]:focus, textarea:focus {
 .notebook-match { background: var(--paper); outline: 2px solid var(--line); outline-offset: 6px; border-radius: 2px; }
 .notebook-browser a:focus-visible, .notebook-browser input:focus-visible, .notebook-browser select:focus-visible, .notebook-browser button:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
 @media (max-width: 1050px) { .notebook-groups { grid-template-columns: minmax(0,1fr); } }
+.context-references { margin: 12px 0 20px; color: var(--ink-soft); }
+.context-references summary { cursor: pointer; font-size: 13px; }
+.context-references nav { display: flex; flex-wrap: wrap; gap: 8px 20px; padding: 12px 0; }
+.context-references a { font-size: 13px; color: var(--ink); }
