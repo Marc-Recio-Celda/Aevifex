@@ -58,7 +58,7 @@
     }
     return {docs, folders: [...children].map(([name, count]) => ({name, count, path: prefix + name}))};
   }
-  function render(source, current, files, dependencies = host) {
+  function render(source, current, files, dependencies = host, navigation = {}) {
     const md = dependencies.markdownit({html: false, breaks: false, linkify: false});
     const outline = [], problems = [], counts = new Map();
     md.core.ruler.before('block', 'wiki_table_pipes', state => {
@@ -77,7 +77,7 @@
     function destination(raw, wiki) {
       const result = resolve(raw, current, files, wiki);
       if (result.kind === 'external') return {href: result.href, external: true};
-      if (result.kind === 'note') return {href: route({root: result.file.root, path: result.file.path, anchor: result.anchor})};
+      if (result.kind === 'note') return {href: (navigation.noteRoute || route)({root: result.file.root, path: result.file.path, anchor: result.anchor})};
       const index = problems.push(result) - 1;
       return {href: '#library-reference-' + index, problem: result.kind, index};
     }
@@ -141,8 +141,21 @@
       const t = tokens[i], d = destination(t.attrGet('src') || '', true);
       return `<a href="${escape(d.href)}"${d.problem ? ` class="note-unresolved" data-reference="${d.index}"` : ''}>${escape(t.content || t.attrGet('src'))}</a>`;
     };
+    if (navigation.sourceLines) {
+      for (const type of ['fence','code_block','math_block']) {
+        const renderBlock=md.renderer.rules[type];
+        md.renderer.rules[type]=(tokens,i,...args)=> {
+          const map=tokens[i].map, offset=navigation.lineOffset || 0;
+          return `<div data-source-line="${map[0]+1+offset}" data-source-end="${map[1]+offset}">${renderBlock(tokens,i,...args)}</div>`;
+        };
+      }
+    }
     const tokens = md.parse(source, {});
     for (let i = 0; i < tokens.length; i++) {
+      if (navigation.sourceLines && tokens[i].map && tokens[i].nesting === 1) {
+        tokens[i].attrSet('data-source-line', String(tokens[i].map[0] + 1 + (navigation.lineOffset || 0)));
+        tokens[i].attrSet('data-source-end', String(tokens[i].map[1] + (navigation.lineOffset || 0)));
+      }
       if (tokens[i].type === 'blockquote_open' && tokens[i + 2]?.type === 'inline') {
         const children = tokens[i + 2].children || [], first = children[0];
         const marker = first?.type === 'text' && /^\[!([\w-]+)\][+-]?\s*/.exec(first.content);

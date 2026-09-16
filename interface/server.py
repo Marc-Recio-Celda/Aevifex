@@ -100,6 +100,7 @@ def load_adapter(path):
         # ⛔ Qué se puede navegar lo declara la instancia. El motor no nombra ninguna raíz.
         "browse": data.get("browse") or [],
         "library": data.get("library") or {},
+        "notebook": data.get("notebook") or {},
         "path": str(p)
     }
 
@@ -191,6 +192,15 @@ def _library_sections(adapter):
     return sections
 
 
+def _notebook_metadata(adapter):
+    config = adapter.get("notebook") or {}
+    declared = {name for name, _ in _browse_scopes(adapter)}
+    if config.get("root") not in declared:
+        return {"available": False, "why": "Notebook no tiene una carpeta navegable declarada en el adaptador."}
+    return {"available": True, **{k: config[k] for k in
+            ("root", "guide", "groups", "file_labels", "sheet_names") if k in config}}
+
+
 def _note_metadata(body):
     """Read simple title/alias metadata; preserve the full YAML in the document response."""
     aliases = []
@@ -229,7 +239,7 @@ def tree(adapter):
             except OSError:
                 continue
     return {"available": True, "roots": [name for name, _ in scopes],
-            "sections": _library_sections(adapter), "files": files}
+            "sections": _library_sections(adapter), "notebook": _notebook_metadata(adapter), "files": files}
 
 
 def read_file(adapter, rel, root=None):
@@ -376,12 +386,17 @@ def task_sheet(adapter, task_id):
             "order_why": meta.get("order_why", "")}
 
 
-def search(adapter, q, limit=200, library=False, root=None):
+def search(adapter, q, limit=200, library=False, root=None, documents=False):
     """El `grep` que el operador corre fuera. Sobre las mismas raíces y nada más."""
     q = (q or "").strip()
     if len(q) < 2:
         return {"available": False, "why": "hacen falta al menos dos caracteres"}
     needle, hits = q.lower(), []
+    if documents:
+        import unicodedata
+        normalize = lambda value: "".join(c for c in unicodedata.normalize("NFD", value.lower()) if not unicodedata.combining(c))
+        needle = normalize(q)
+    identifier = re.compile(r"(?<![\w-])" + re.escape(needle) + r"(?![\w-])") if documents and re.fullmatch(r"[a-z]+-\d+", needle) else None
     allowed = {s["root"] for s in _library_sections(adapter)} if library else None
     for name, raiz in _browse_scopes(adapter):
         if (allowed is not None and name not in allowed) or (root and name != root):
@@ -390,12 +405,13 @@ def search(adapter, q, limit=200, library=False, root=None):
             try:
                 for n, line in enumerate(real.read_text(encoding="utf-8", errors="replace")
                                          .splitlines(), 1):
-                    if needle in line.lower():
+                    text = normalize(line) if documents else line.lower()
+                    if (identifier.search(text) if identifier else needle in text):
                         hits.append({"root": name, "path": str(f.relative_to(raiz)),
                                      "line": n, "text": line.strip()[:240]})
                         if len(hits) >= limit:
                             return {"available": True, "q": q, "hits": hits, "capped": True}
-                        if library:
+                        if library or documents:
                             break  # One result per document keeps long notes from hiding the rest.
             except OSError:
                 continue
@@ -673,7 +689,8 @@ def make_handler(adapter):
             elif path == "/api/search":
                 params = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
                 self._send(200, search(adapter, params.get("q", [""])[0],
-                                     library=params.get("library") == ["1"], root=params.get("root", [None])[0]))
+                                     library=params.get("library") == ["1"], root=params.get("root", [None])[0],
+                                     documents=params.get("documents") == ["1"]))
             elif path == "/api/metrics":
                 # `interface:I3.1` — las firings de los roles son la única medida de la salud
                 # del sistema, y eran lo único que esta interfaz no podía pintar. El script ya

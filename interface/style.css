@@ -6747,3 +6747,31 @@ input[type="text"]:focus, textarea:focus {
   .mailbox-project span { flex-basis: 100%; }
   .mailbox-search select { min-width: 130px; }
 }
+
+/* Notebook keeps the actual sheets together, with no separate park room. */
+.notebook-browser { max-width: 1200px; margin: 12px auto 64px; color: var(--ink); }
+.notebook-search { display: flex; flex-direction: row; flex-wrap: wrap; gap: 12px; align-items: end; margin: 24px 0; }
+.notebook-search label { display: flex; flex-direction: column; gap: 7px; font-size: 12px; color: var(--ink-soft); }
+.notebook-search label:has(input) { flex: 1; min-width: 170px; }
+.notebook-search select, .notebook-search input, .notebook-search button { padding: 10px 12px; min-height: 40px; border: 1px solid var(--line); border-radius: 7px; color: var(--ink); background: var(--paper-card); font: inherit; }
+.notebook-search select { max-width: 240px; }
+.notebook-search button { cursor: pointer; }
+.notebook-search > a { color: var(--ink-soft); font-size: 12px; padding: 12px 4px; }
+.notebook-groups { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 18px; align-items: start; }
+.notebook-group { border: 1px solid var(--line); border-radius: 10px; background: var(--paper-card); padding: 20px; }
+.notebook-group header { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; margin-bottom: 14px; }
+.notebook-group h2 { font-size: 19px; font-weight: 600; margin: 3px 0; }
+.notebook-group small, .notebook-group header > span, .notebook-group > p { font-size: 12px; color: var(--ink-soft); }
+.notebook-group > p { margin: 0 0 12px; }
+.notebook-sheet { display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid var(--line); padding: 13px 0; text-decoration: none; color: var(--ink); }
+.notebook-sheet strong { font-size: 14px; font-weight: 400; overflow-wrap: anywhere; }
+.notebook-sheet:hover strong { text-decoration: underline; text-underline-offset: 4px; }
+.notebook-sheet span { color: var(--ink-soft); }
+.notebook-reader-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; margin: 24px 0; font-size: 13px; }
+.notebook-reader-bar > span { color: var(--ink-soft); }
+.notebook-reader-bar .quiet-back { margin: 0; }
+.notebook-reader-bar nav { display: flex; gap: 14px; margin-left: auto; }
+.notebook-reader-bar nav a { color: var(--ink); text-underline-offset: 4px; }
+.notebook-match { background: var(--paper); outline: 2px solid var(--line); outline-offset: 6px; border-radius: 2px; }
+.notebook-browser a:focus-visible, .notebook-browser input:focus-visible, .notebook-browser select:focus-visible, .notebook-browser button:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+@media (max-width: 1050px) { .notebook-groups { grid-template-columns: minmax(0,1fr); } }

@@ -49,9 +49,25 @@ in English or Spanish is shown first; ambiguous fields and unstructured prose ke
 order. No mailbox state or source file is modified by the web. Query drafts, focus, disclosures
 and reading positions survive live refresh; unrelated changes do not replace the mailbox DOM.
 
+Notebook reads every Markdown sheet under one exact browse root. Declare `notebook.root` in the
+adapter; optional `guide`, `groups` (`path`, `label`, `description`, `project`), `file_labels` and
+`sheet_names` label the existing files without creating empty groups. `.` denotes root-level
+sheets. Other groups follow actual folders; a folder matching a project's lab/name links to that
+project only when its identity is unique. The guide remains directly accessible.
+
+The `#/notebook` route stores group, query, document and section/line target. Legacy `#/ideas`
+routes resolve here. Text search uses `/api/search?documents=1&root=...&q=...`: one result per
+document prevents long sheets from hiding later files. Search ignores accents and treats bare
+identifiers as whole identifiers. Repeated identifiers in separate sheets remain separate
+results. The reader keeps source prose and the original Markdown, follows Notebook links within
+the room and relocates search highlights after a source edit. A removed query or sheet is stated
+explicitly. Capture, editing and triage remain outside the read-only web.
+
 Checks, run from the repository root:
 
 ```sh
+python3 interface/tests/notebook.py
+node interface/tests/notebook.mjs
 node interface/tests/mailbox.mjs
 python3 interface/tests/library.py
 node interface/tests/library.mjs
