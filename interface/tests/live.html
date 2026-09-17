@@ -18,7 +18,15 @@ try {
   check(!fixture.querySelector('[data-live-key="a"]'),'Deleted row remains');
   const control=fixture.querySelector('[data-live-key="b"]'); fixture.innerHTML=fixture.innerHTML;
   check(fixture.querySelector('[data-live-key="b"]')!==control,'Broken full replacement was not detected');
-  result.textContent='PASS: DOM identity, updates, removals, focus, draft, selection, disclosure and full-replacement control.';
+  const diagram='<figure data-live-source="source"><div class="output">Placeholder</div></figure>';
+  LiveModel.paint(fixture,diagram);
+  fixture.querySelector('.output').innerHTML='<svg><text>Rendered diagram</text></svg>';
+  const svg=fixture.querySelector('svg');
+  LiveModel.paint(fixture,diagram);
+  check(fixture.querySelector('svg')===svg,'Unchanged diagram was rebuilt');
+  LiveModel.paint(fixture,diagram.replace('data-live-source="source"','data-live-source="changed"'));
+  check(!svg.isConnected,'Changed diagram source kept an obsolete graphic');
+  result.textContent='PASS: DOM identity, edits, removals, focus, drafts, disclosures, diagram identity and replacement control.';
   fixture.hidden=true;
   if(new URLSearchParams(location.search).has('fixture')) {
     const frame=document.createElement('iframe'); frame.src='/#/cockpit'; frame.width='1200'; frame.height='750'; document.body.append(frame);
