@@ -134,7 +134,7 @@
     md.renderer.rules.math_block = (tokens, i) => math(tokens[i].content, true);
     const fence = md.renderer.rules.fence;
     md.renderer.rules.fence = (tokens, i, options, env, self) => tokens[i].info.trim() === 'mermaid'
-      ? `<figure class="note-diagram"><div class="diagram-output" aria-label="Diagrama" aria-busy="true">Cargando diagrama…</div><details><summary>Ver código del diagrama</summary><pre><code>${escape(tokens[i].content)}</code></pre></details></figure>`
+      ? `<figure class="note-diagram" data-live-source="${escape(tokens[i].content)}"><div class="diagram-output" aria-label="Diagrama" aria-busy="true">Cargando diagrama…</div><details><summary>Ver código del diagrama</summary><pre><code>${escape(tokens[i].content)}</code></pre></details></figure>`
       : fence(tokens, i, options, env, self);
     // Images only become links: absent or undeclared attachments must not be invented or fetched remotely.
     md.renderer.rules.image = (tokens, i) => {

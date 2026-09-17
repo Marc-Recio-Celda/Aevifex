@@ -6636,3 +6636,6 @@ input[type="text"]:focus, textarea:focus {
 .context-references summary { cursor: pointer; font-size: 13px; }
 .context-references nav { display: flex; flex-wrap: wrap; gap: 8px 20px; padding: 12px 0; }
 .context-references a { font-size: 13px; color: var(--ink); }
+.nav-secondary { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 12px; }
+.nav-secondary > summary { cursor: pointer; padding: 8px 16px; color: var(--ink-soft); font-size: 13px; }
+.nav-secondary .nav-menu { margin-top: 8px; }

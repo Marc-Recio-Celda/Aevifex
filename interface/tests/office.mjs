@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import assert from 'node:assert/strict';
 const source = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const functions = source.slice(source.indexOf('function normaliseTitle('), source.indexOf('const STATE_META'));
-const context = vm.createContext({ STATE: {
+const context = vm.createContext({paintView:(container, html)=>{container.innerHTML=html;}, STATE: {
   fronts: [
     { id: 'one', name: 'Same title', project: 'first', row: 'summary', active: true, sheet: 'first.md' },
     { id: 'two', name: 'Same title', project: 'second', row: 'summary', active: true, sheet: 'second.md' },

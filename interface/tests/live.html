@@ -1,0 +1,42 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Live update checks</title>
+<body><h1>Live update checks</h1><p id="result" role="status">Running…</p><div id="fixture"></div>
+<script src="../render/live.js"></script>
+<script>
+const result=document.getElementById('result'), fixture=document.getElementById('fixture');
+function check(value, why) { if(!value) throw new Error(why); }
+try {
+  const before='<input id="query" value=""><details id="reading"><summary>Context</summary><p>Read me</p></details><div id="rows"><article data-live-key="a">First</article><article data-live-key="b">Second</article></div>';
+  LiveModel.paint(fixture,before);
+  const input=fixture.querySelector('input'), details=fixture.querySelector('details'), second=fixture.querySelector('[data-live-key="b"]');
+  input.value='Unsubmitted draft'; input.focus(); input.setSelectionRange(2,7); details.open=true;
+  LiveModel.paint(fixture,before.replace('First','Updated'));
+  check(fixture.querySelector('[data-live-key="b"]')===second,'Unchanged row was replaced');
+  check(document.activeElement===input && input.value==='Unsubmitted draft' && input.selectionStart===2 && input.selectionEnd===7,'Lost focus, draft or selection');
+  check(details.open,'Collapsed reading context');
+  LiveModel.paint(fixture,before.replace('<article data-live-key="a">First</article>','').replace('Second','Second changed')+'<p>New footer</p>');
+  check(fixture.querySelector('[data-live-key="b"]')===second && second.textContent==='Second changed','Deletion replaced the surviving row');
+  check(!fixture.querySelector('[data-live-key="a"]'),'Deleted row remains');
+  const control=fixture.querySelector('[data-live-key="b"]'); fixture.innerHTML=fixture.innerHTML;
+  check(fixture.querySelector('[data-live-key="b"]')!==control,'Broken full replacement was not detected');
+  result.textContent='PASS: DOM identity, updates, removals, focus, draft, selection, disclosure and full-replacement control.';
+  fixture.hidden=true;
+  if(new URLSearchParams(location.search).has('fixture')) {
+    const frame=document.createElement('iframe'); frame.src='/#/cockpit'; frame.width='1200'; frame.height='750'; document.body.append(frame);
+    let rows, stage=0;
+    const timer=setInterval(()=>{
+      try {
+        const doc=frame.contentDocument, cards=[...doc.querySelectorAll('.quiet-task')];
+        if(!stage && cards.length===2) { rows=cards; stage=1; result.textContent='Ready for source edit'; }
+        if(stage===1 && doc.body.textContent.includes('Updated purpose')) {
+          check(cards[0]===rows[0] && cards[1]===rows[1],'Application replaced task rows during a background edit');
+          stage=2;result.textContent='PASS: application edit preserves both task rows. Ready for addition and removal.';
+        }
+        if(stage===2 && doc.body.textContent.includes('Third task')) {
+          check(cards.length===2 && cards[0]===rows[1] && !rows[0].isConnected,'Application addition/removal lost surviving identity');
+          result.textContent='PASS: application edit, addition and removal preserve unchanged DOM.';clearInterval(timer);
+        }
+      } catch(error) { result.textContent='FAIL: '+error.message;clearInterval(timer); }
+    },200);
+  }
+} catch(error) { result.textContent='FAIL: '+error.message; }
+</script></body></html>

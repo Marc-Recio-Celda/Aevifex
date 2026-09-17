@@ -46,22 +46,22 @@
   <div class="app-layout">
     <!-- SIDEBAR NAVIGATION -->
     <aside class="sidebar">
-      <div class="sidebar-section-title">VISTAS PRINCIPALES</div>
-      <nav class="nav-menu">
-        <button class="nav-item active" data-view="overview">
-          <span class="nav-icon">🏛️</span>
-          <span class="nav-label">Portada</span>
-          <span class="nav-badge star-badge">v1.1</span>
+      <div class="sidebar-section-title">TU OFICINA</div>
+      <nav class="nav-menu" aria-label="Navegación diaria">
+        <button class="nav-item" data-view="cockpit">
+          <span class="nav-icon">🗂️</span>
+          <span class="nav-label">Oficina</span>
+          <span class="nav-badge live-badge">LIVE</span>
         </button>
         <button class="nav-item" data-view="projects">
           <span class="nav-icon">🚀</span>
           <span class="nav-label">Proyectos</span>
           <span class="nav-badge count-badge" id="badgeProjects">0</span>
         </button>
-        <button class="nav-item" data-view="cockpit">
-          <span class="nav-icon">🗂️</span>
-          <span class="nav-label">Oficina</span>
-          <span class="nav-badge live-badge">LIVE</span>
+        <button class="nav-item" data-view="library">
+          <span class="nav-icon">📚</span>
+          <span class="nav-label">Biblioteca</span>
+          <span class="nav-badge count-badge" id="badgeLibrary">0</span>
         </button>
         <button class="nav-item" data-view="inbox">
           <span class="nav-icon">📬</span>
@@ -73,22 +73,27 @@
           <span class="nav-label">Notebook</span>
           <span class="nav-badge count-badge" id="badgeNotebook">0</span>
         </button>
-        <button class="nav-item" data-view="library">
-          <span class="nav-icon">📚</span>
-          <span class="nav-label">Biblioteca</span>
-          <span class="nav-badge count-badge" id="badgeLibrary">0</span>
-        </button>
-        <button class="nav-item" data-view="dashboard">
-          <span class="nav-icon">📐</span>
-          <span class="nav-label">Dashboard</span>
-          <span class="nav-badge star-badge">PH-6</span>
+      </nav>
+      <details class="nav-secondary" id="secondaryNavigation">
+        <summary>Más</summary>
+        <nav class="nav-menu" aria-label="Más secciones">
+        <button class="nav-item" data-view="overview">
+          <span class="nav-icon">🏛️</span>
+          <span class="nav-label">Portada</span>
+          <span class="nav-badge star-badge">v1.1</span>
         </button>
         <button class="nav-item" data-view="skills">
           <span class="nav-icon">🏺</span>
           <span class="nav-label">Ágora</span>
           <span class="nav-badge count-badge" id="badgeSkills">0</span>
         </button>
-      </nav>
+        <button class="nav-item" data-view="dashboard">
+          <span class="nav-icon">📐</span>
+          <span class="nav-label">Dashboard</span>
+          <span class="nav-badge star-badge">PH-6</span>
+        </button>
+        </nav>
+      </details>
 
       <div class="sidebar-footer">
         <div class="filter-group">
@@ -131,6 +136,7 @@
   <script src="render/mailbox.js"></script>
   <script src="render/notebook.js"></script>
   <script src="render/references.js"></script>
+  <script src="render/live.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

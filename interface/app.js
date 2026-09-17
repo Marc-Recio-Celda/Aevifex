@@ -1,5 +1,5 @@
 // Aevifex & NEXUS Operations Cockpit Dashboard
-// Zero static hardcoding — builds all views reactively from /api/model.
+// Read-only views derived from /api/model snapshots and entity deltas.
 // Live polling via /api/stamp every 2s (AX-7).
 
 const STORAGE_KEYS = {
@@ -31,6 +31,7 @@ let STATE = {
 };
 
 let STAMP = null;
+let MODEL = null;
 
 // `esc`, `inline` y `jsq` viven en `render/escape.js`, que `index.html` carga antes que
 // este fichero. Están en un fichero propio porque son el borde entre contenido y código:
@@ -154,75 +155,85 @@ function projectViewModel(entities, fronts = []) {
 }
 
 // Ingest typed model from server
-function ingestModel(model) {
+function ingestModel(model, changed = null) {
+  const before = {...STATE};
+  const has = (...kinds) => !changed || kinds.some(kind => changed.has(kind));
   const entities = model.entities || [];
   STATE.problems = model.problems || [];
-  STATE.taskSheets = Object.fromEntries(Object.entries(STATE.taskSheets || {}).map(([id, sheet]) => [id, { ...sheet, stale: true }]));
+
   
-  // Fronts & Active Front
-  STATE.fronts = entities.filter(e => e.kind === "front");
-  STATE.activeFront = STATE.fronts.find(e => e.active) || (STATE.fronts[0] || null);
+  if (has('front')) {
+    // Fronts & Active Front
+    STATE.fronts = entities.filter(e => e.kind === "front");
+    STATE.activeFront = STATE.fronts.find(e => e.active) || (STATE.fronts[0] || null);
 
-  // Live Plan items & metadata
-  STATE.livePlan = entities.filter(e => e.kind === "plan-item").map(e => ({
-    id: e.id,
-    index: e.index,
-    // ⛔ `line` is what lets the desk write an item BACK. Without it the office can only
-    // read the plan, which is the whole of what was wrong with the old cockpit.
-    line: e.line,
-    text: e.text || "",
-    struck: Boolean(e.struck),
-    destination: e.destination || "",
-    outcome: e.outcome || null,
-    section: e.section || null,
-    subsection: e.subsection || null,
-    ordered: e.ordered !== false,
-    author: e.author || null,
-    date: e.date || null,
-    project: e.project || "cross"
-  }));
-  STATE.planSections = entities.filter(e => e.kind === "plan-section").map(e => ({
-    level: e.level, title: e.title, section: e.section, subsection: e.subsection, line: e.line
-  }));
-  STATE.livePlanMeta = entities.find(e => e.kind === "live-plan-meta") || null;
+  }
 
-  // Persistent Plans (from data/plans/*.json)
-  STATE.plans = entities.filter(e => e.kind === "plan").map(e => ({
-    id: e._record_id || e.id || "",
-    project: e.project || "nexus",
-    title: e.title || e.task || "",
-    task: e.task || e.title || "",
-    block: e.block || "",
-    sub_block: e.sub_block || "",
-    status: e.status || "closed",
-    date: e.date || "",
-    closed_on: e.closed_on || e.closed_date || null,
-    author: e.author || e.origin || "Operator",
-    order_why: e.order_why || "",
-    closing_note: e.closing_note || "",
-    items: Array.isArray(e.items) ? e.items.map((it, idx) => ({
-      index: it.n || it.index || idx + 1,
-      text: it.text || "",
-      status: (it.outcome === "done" || it.status === "done" || it.status === "closed" || Boolean(it.struck)) ? "done" : "open",
-      destination: it.destination || it.outcome || (it.note ? it.note : (it.struck ? "✅ resolved" : "")),
-      completed_at: it.completed_at || it.date || null
-    })) : []
-  }));
+  if (has('plan-item', 'plan-section', 'live-plan-meta')) {
+    // Live Plan items & metadata
+    STATE.livePlan = entities.filter(e => e.kind === "plan-item").map(e => ({
+      id: e.id,
+      index: e.index,
+      line: e.line,
+      text: e.text || "",
+      struck: Boolean(e.struck),
+      destination: e.destination || "",
+      outcome: e.outcome || null,
+      section: e.section || null,
+      subsection: e.subsection || null,
+      ordered: e.ordered !== false,
+      author: e.author || null,
+      date: e.date || null,
+      project: e.project || "cross"
+    }));
+    STATE.planSections = entities.filter(e => e.kind === "plan-section").map(e => ({
+      level: e.level, title: e.title, section: e.section, subsection: e.subsection, line: e.line
+    }));
+    STATE.livePlanMeta = entities.find(e => e.kind === "live-plan-meta") || null;
 
-  // Decisions (all decision and method-decision records)
-  const rawDecisions = entities.filter(e => e.kind === "decision" || e.kind === "method-decision");
-  
-  // Build project-scoped supersedes map
-  const supersededByMap = new Map();
-  for (const d of rawDecisions) {
-    const proj = String(d.project || "nexus").trim();
-    const thisId = String(d._record_id || d.id || "").trim();
-    const target = String(d.supersedes || "").trim();
-    if (target) {
-      const targetKey = `${proj}:${target}`;
-      if (!supersededByMap.has(targetKey)) supersededByMap.set(targetKey, []);
-      supersededByMap.get(targetKey).push(thisId);
-    }
+  }
+
+  if (has('plan')) {
+    // Persistent Plans (from data/plans/*.json)
+    STATE.plans = entities.filter(e => e.kind === "plan").map(e => ({
+      id: e._record_id || e.id || "",
+      project: e.project || "nexus",
+      title: e.title || e.task || "",
+      task: e.task || e.title || "",
+      block: e.block || "",
+      sub_block: e.sub_block || "",
+      status: e.status || "closed",
+      date: e.date || "",
+      closed_on: e.closed_on || e.closed_date || null,
+      author: e.author || e.origin || "Operator",
+      order_why: e.order_why || "",
+      closing_note: e.closing_note || "",
+      items: Array.isArray(e.items) ? e.items.map((it, idx) => ({
+        index: it.n || it.index || idx + 1,
+        text: it.text || "",
+        status: (it.outcome === "done" || it.status === "done" || it.status === "closed" || Boolean(it.struck)) ? "done" : "open",
+        destination: it.destination || it.outcome || (it.note ? it.note : (it.struck ? "✅ resolved" : "")),
+        completed_at: it.completed_at || it.date || null
+      })) : []
+    }));
+
+  }
+
+  if (has('decision', 'method-decision')) {
+    // Decisions (all decision and method-decision records)
+    const rawDecisions = entities.filter(e => e.kind === "decision" || e.kind === "method-decision");
+    
+    // Build project-scoped supersedes map
+    const supersededByMap = new Map();
+    for (const d of rawDecisions) {
+      const proj = String(d.project || "nexus").trim();
+      const thisId = String(d._record_id || d.id || "").trim();
+      const target = String(d.supersedes || "").trim();
+      if (target) {
+        const targetKey = `${proj}:${target}`;
+        if (!supersededByMap.has(targetKey)) supersededByMap.set(targetKey, []);
+        supersededByMap.get(targetKey).push(thisId);
+      }
   }
 
   STATE.decisions = rawDecisions.map(d => {
@@ -251,107 +262,128 @@ function ingestModel(model) {
     };
   });
 
-  // Mailbox
-  STATE.mailbox = entities.filter(e => e.kind === "mailbox-entry").map(e => ({
-    id: e.id,
-    title: e.title || "",
-    project: e.project || "cross",
-    state: e.state || "open",
-    destination: e.destination || "inbox",
-    // Los cuatro de `AX-46`. `prose` es lo que sobra del cuerpo una vez sacados.
-    serves: e.serves || null,
-    what: e.what || null,
-    asks: e.asks || null,
-    affects: e.affects || null,
-    stale: Boolean(e.stale),
-    prose: e.prose || "",
-    body: e.body || "",
-    line: e.line,
-    file: e.file || "",
-    author: e.author || e.origin || "Agent",
-    date: e.date || "",
-    date_inferred: Boolean(e.date_inferred),
-    origin_inferred: Boolean(e.origin_inferred)
-  }));
+  }
 
-  // Ideas
-  STATE.ideas = entities.filter(e => e.kind === "idea").map(e => ({
-    id: e.id,
-    title: e.title || "",
-    body: e.body || "",
-    project: e.project || "nexus",
-    scope: e.scope || "system",
-    section: e.section || "General",
-    origin: e.origin || "Operator",
-    date_inferred: Boolean(e.date_inferred),
-    origin_inferred: Boolean(e.origin_inferred),
-    // La fuente lo declaró caducado y el aviso se pinta con esto.
-    stale: Boolean(e.stale),
-    source: e.source || ""
-  }));
+  if (has('mailbox-entry')) {
+    // Mailbox
+    STATE.mailbox = entities.filter(e => e.kind === "mailbox-entry").map(e => ({
+      id: e.id,
+      title: e.title || "",
+      project: e.project || "cross",
+      state: e.state || "open",
+      destination: e.destination || "inbox",
+      // Los cuatro de `AX-46`. `prose` es lo que sobra del cuerpo una vez sacados.
+      serves: e.serves || null,
+      what: e.what || null,
+      asks: e.asks || null,
+      affects: e.affects || null,
+      stale: Boolean(e.stale),
+      prose: e.prose || "",
+      body: e.body || "",
+      line: e.line,
+      file: e.file || "",
+      author: e.author || e.origin || "Agent",
+      date: e.date || "",
+      date_inferred: Boolean(e.date_inferred),
+      origin_inferred: Boolean(e.origin_inferred)
+    }));
 
-  // Skills
-  // ⛔ Aquí había un caso especial que forzaba `rnd` a `event` y, si su `when` no le
-  // gustaba, **escribía uno inventado** que no aparece en ningún fichero. La descripción
-  // de `rnd` dice literalmente «on request» y «Use when the operator is stuck…»: el parser
-  // la lee bien y la vista la corregía hacia lo contrario, presentando texto fabricado con
-  // el mismo aspecto que el leído del disco. Una excepción por nombre en la capa de
-  // presentación es una segunda copia de un hecho, y ésta además era falsa.
-  //
-  // ⚠️ Un `trigger` que no viene se queda como `unclear`, no como `request`: el parser
-  // distingue expresamente lo que pudo probar de lo que no, y ese matiz es el valor.
-  STATE.skills = entities.filter(e => e.kind === "skill").map(e => ({
-    id: e.id,
-    title: e.title || "",
-    trigger: e.trigger || "unclear",
-    summary: e.summary || "",
-    when: e.when || "",
-    evidence: e.evidence || ""
-  }));
+  }
 
-  // Tasks (from model + local overrides for comments/discards)
-  const localTasks = JSON.parse(localStorage.getItem(STORAGE_KEYS.TASKS) || "[]");
-  const modelTasks = entities.filter(e => e.kind === "task").map(e => ({
-    id: e.id_raw || e.id || "T",
-    title: e.title || "",
-    project: e.project || "cross",
-    // Los cinco de `FLOW.md`, si la tarea los declara. `status` es el emoji del
-    // vocabulario anterior y sigue conviviendo: ninguno se deriva del otro.
-    state: e.state || null,
-    plan: e.plan || null,
-    block: e.block || null,
-    sub_block: e.sub_block || null,
-    status: e.status || "⬜",
-    why: e.why || "",
-    author: e.author || e.origin || "Operator",
-    date: e.date || new Date().toISOString().slice(0, 10),
-    date_inferred: Boolean(e.date_inferred),
-    origin_inferred: Boolean(e.origin_inferred),
-    file: e.file || "",
-    stale: Boolean(e.stale),
-    source: e.source || "",
-    comments: [],
-    discardReason: null
-  }));
+  if (has('idea')) {
+    // Ideas
+    STATE.ideas = entities.filter(e => e.kind === "idea").map(e => ({
+      id: e.id,
+      title: e.title || "",
+      body: e.body || "",
+      project: e.project || "nexus",
+      scope: e.scope || "system",
+      section: e.section || "General",
+      origin: e.origin || "Operator",
+      date_inferred: Boolean(e.date_inferred),
+      origin_inferred: Boolean(e.origin_inferred),
+      // La fuente lo declaró caducado y el aviso se pinta con esto.
+      stale: Boolean(e.stale),
+      source: e.source || ""
+    }));
 
-  const combinedTasksMap = new Map();
-  for (const t of modelTasks) combinedTasksMap.set(t.id, t);
-  for (const t of localTasks) {
-    if (combinedTasksMap.has(t.id)) {
-      const existing = combinedTasksMap.get(t.id);
-      existing.comments = t.comments || [];
-      if (t.discardReason) existing.discardReason = t.discardReason;
-      if (t.status) existing.status = t.status;
-    } else {
-      combinedTasksMap.set(t.id, t);
-    }
+  }
+
+  if (has('skill')) {
+    // Skills
+    // ⛔ Aquí había un caso especial que forzaba `rnd` a `event` y, si su `when` no le
+    // gustaba, **escribía uno inventado** que no aparece en ningún fichero. La descripción
+    // de `rnd` dice literalmente «on request» y «Use when the operator is stuck…»: el parser
+    // la lee bien y la vista la corregía hacia lo contrario, presentando texto fabricado con
+    // el mismo aspecto que el leído del disco. Una excepción por nombre en la capa de
+    // presentación es una segunda copia de un hecho, y ésta además era falsa.
+    //
+    // ⚠️ Un `trigger` que no viene se queda como `unclear`, no como `request`: el parser
+    // distingue expresamente lo que pudo probar de lo que no, y ese matiz es el valor.
+    STATE.skills = entities.filter(e => e.kind === "skill").map(e => ({
+      id: e.id,
+      title: e.title || "",
+      trigger: e.trigger || "unclear",
+      summary: e.summary || "",
+      when: e.when || "",
+      evidence: e.evidence || ""
+    }));
+
+  }
+
+  if (has('task')) {
+    // Tasks (from model + local overrides for comments/discards)
+    const localTasks = JSON.parse(localStorage.getItem(STORAGE_KEYS.TASKS) || "[]");
+    const modelTasks = entities.filter(e => e.kind === "task").map(e => ({
+      id: e.id_raw || e.id || "T",
+      title: e.title || "",
+      project: e.project || "cross",
+      // Los cinco de `FLOW.md`, si la tarea los declara. `status` es el emoji del
+      // vocabulario anterior y sigue conviviendo: ninguno se deriva del otro.
+      state: e.state || null,
+      plan: e.plan || null,
+      block: e.block || null,
+      sub_block: e.sub_block || null,
+      status: e.status || "⬜",
+      why: e.why || "",
+      author: e.author || e.origin || "Operator",
+      date: e.date || new Date().toISOString().slice(0, 10),
+      date_inferred: Boolean(e.date_inferred),
+      origin_inferred: Boolean(e.origin_inferred),
+      file: e.file || "",
+      stale: Boolean(e.stale),
+      source: e.source || "",
+      comments: [],
+      discardReason: null
+    }));
+
+    const combinedTasksMap = new Map();
+    for (const t of modelTasks) combinedTasksMap.set(t.id, t);
+    for (const t of localTasks) {
+      if (combinedTasksMap.has(t.id)) {
+        const existing = combinedTasksMap.get(t.id);
+        existing.comments = t.comments || [];
+        if (t.discardReason) existing.discardReason = t.discardReason;
+        if (t.status) existing.status = t.status;
+      } else {
+        combinedTasksMap.set(t.id, t);
+      }
   }
   STATE.tasks = Array.from(combinedTasksMap.values());
 
-  STATE.projects = projectViewModel(entities, STATE.fronts);
-  // Keep the current document visible while its refreshed source is fetched.
-  STATE.projectCatalogs = Object.fromEntries(Object.entries(STATE.projectCatalogs || {}).map(([key, value]) => [key, { ...value, stale: true }]));
-  STATE.projectDocuments = Object.fromEntries(Object.entries(STATE.projectDocuments || {}).map(([key, value]) => [key, { ...value, stale: true }]));
+  }
+
+  if (has("project-state", "front")) STATE.projects = projectViewModel(entities, STATE.fronts);
+  for (const key of ['fronts', 'livePlan', 'plans', 'decisions', 'mailbox', 'ideas', 'skills', 'tasks', 'projects']) {
+    STATE[key] = LiveModel.reuse(before[key], STATE[key], row => key === 'projects' ? row.name : key === 'decisions' ? JSON.stringify([row.project,row.id,row.file]) : row.id);
+  }
+  STATE.activeFront = STATE.fronts.find(e => e.active) || STATE.fronts[0] || null;
+  if (has('front')) for (const front of STATE.fronts) {
+      if (before.fronts?.find(f => f.id === front.id) !== front && STATE.taskSheets?.[front.id]) STATE.taskSheets[front.id].stale = true;
+  }
+  if (has('project-state')) for (const project of STATE.projects) {
+      if (before.projects?.find(p => p.name === project.name) !== project && STATE.projectCatalogs?.[project.name]) STATE.projectCatalogs[project.name].stale = true;
+  }
 
   if (!STATE.selectedProject && STATE.projects.length && STATE.currentView !== "project-detail") {
     STATE.selectedProject = STATE.projects[0].name;
@@ -365,8 +397,8 @@ function updateHUD() {
   const frontEl = document.getElementById("hudActiveFront");
   if (frontEl) {
     const count = STATE.fronts.filter(f => f.active && !f.in_bin).length;
-    frontEl.innerHTML = `<span class="front-marker">OFICINA</span>
-      <span class="front-title">${count} tareas activas</span>`;
+    LiveModel.paint(frontEl, `<span class="front-marker">OFICINA</span>
+      <span class="front-title">${count} tareas activas</span>`);
   }
 
   // Update Sidebar Badges
@@ -400,8 +432,8 @@ function updateHUD() {
   const projSelect = document.getElementById("projectFilter");
   if (projSelect) {
     const cur = projSelect.value || "ALL";
-    projSelect.innerHTML = `<option value="ALL">Todos los proyectos (${STATE.projects.length})</option>` +
-      STATE.projects.map(p => `<option value="${esc(p.name)}" ${p.name === cur ? "selected" : ""}>${esc(p.name)}</option>`).join("");
+    LiveModel.paint(projSelect, `<option value="ALL">Todos los proyectos (${STATE.projects.length})</option>` +
+      STATE.projects.map(p => `<option value="${esc(p.name)}" ${p.name === cur ? "selected" : ""}>${esc(p.name)}</option>`).join(""));
   }
 
   // Update dynamic modal project dropdowns
@@ -639,14 +671,19 @@ const PROJECT_READING = (() => {
 
 function rememberProjectReading(main) {
   const route = main.dataset.route || "";
-  if (!(route.startsWith("#/project/") || route.startsWith("#/library") || route.startsWith("#/inbox") || route.startsWith("#/notebook")) || main.dataset.readerReady !== "true") return;
+  if (!(route.startsWith("#/project/") || route.startsWith("#/library") || route.startsWith("#/inbox") || route.startsWith("#/notebook") || route.startsWith("desk/")) || main.dataset.readerReady !== "true") return;
   const saved = PROJECT_READING[route] || (PROJECT_READING[route] = { details: {} });
   saved.scroll = main.scrollTop;
   main.querySelectorAll("details[id]").forEach(detail => { saved.details[detail.id] = detail.open; });
   try { sessionStorage.setItem("project-reading", JSON.stringify(PROJECT_READING)); } catch {}
 }
 
-function renderView() {
+function paintView(container, html) {
+  if (container.dataset.live === "true") LiveModel.paint(container, html);
+  else container.innerHTML = html;
+}
+
+function renderView(live = false) {
   const main = document.getElementById("mainContent");
   if (!main) return;
 
@@ -692,6 +729,7 @@ function renderView() {
   STATE.readingPositions = STATE.readingPositions || {};
   if (main.dataset.route) STATE.readingPositions[main.dataset.route] = main.scrollTop;
   const sameRoute = main.dataset.route === route;
+  main.dataset.live = String(live && sameRoute);
   const openDetails = sameRoute ? [...main.querySelectorAll("details[id][open]")].map(d => d.id) : [];
   const savedReading = PROJECT_READING[route];
   const scrollTop = savedReading?.scroll ?? STATE.readingPositions[route] ?? 0;
@@ -713,10 +751,13 @@ function renderView() {
   }
 
   main.dataset.route = route;
+  const secondaryNavigation=document.getElementById('secondaryNavigation');
+  if(secondaryNavigation && ['overview','skills','skill','dashboard'].includes(STATE.currentView)) secondaryNavigation.open=true;
   const sidebarFilter = document.getElementById('projectFilter')?.closest('.filter-group');
   if (sidebarFilter) sidebarFilter.style.display = ['inbox','notebook'].includes(STATE.currentView) ? 'none' : '';
   openDetails.forEach(id => { const node = document.getElementById(id); if (node) node.open = true; });
-  main.dataset.readerReady = String(Boolean(main.querySelector(".project-page, .project-file-index, .library-browser, .mailbox-room, .notebook-browser")));
+  main.dataset.readerReady = String(Boolean(main.querySelector(".project-page, .project-file-index, .library-browser, .mailbox-room, .notebook-browser, .quiet-desk")));
+  if (STATE.currentView === 'desk') main.dataset.readerReady = String(Boolean(STATE.taskSheets?.[STATE.deskCardId] && !STATE.taskSheets[STATE.deskCardId].loading));
   if (STATE.currentView === 'notebook' && notebookLocation().path) main.dataset.readerReady = String(STATE.notes?.[Library.key({root:STATE.tree?.notebook?.root,path:notebookLocation().path})]?.body !== undefined);
   Object.entries(savedReading?.details || {}).forEach(([id, open]) => {
     const detail = document.getElementById(id); if (detail) detail.open = open;
@@ -754,7 +795,7 @@ function renderOverview(container) {
   const isCollapsed = (id) => Boolean(STATE.collapsedSections && STATE.collapsedSections[id]);
   const ax = D().axioms, cl = D().clauses;
 
-  container.innerHTML = `
+  paintView(container, `
     <div class="overview-container">
       <!-- EL PROPILEO: la puerta -->
       <header class="propylaea">
@@ -873,7 +914,7 @@ function renderOverview(container) {
         </div>
       </section>
     </div>
-  `;
+  `);
 }
 
 // ── 02 · el entablamento: los tres niveles, uno encima de otro ───────────────
@@ -1324,18 +1365,18 @@ function projectRoute(name, section = "objectives", file = "", anchor = "") {
 function renderProjectsHub(container) {
   const projects = STATE.projects.filter(p => !STATE.taskFilterProj || p.name === STATE.taskFilterProj);
   const groups = [...new Set(projects.map(p => p.lab))];
-  container.innerHTML = `<section class="project-room">
+  paintView(container, `<section class="project-room">
     <header class="quiet-heading"><p class="quiet-eyebrow">PROYECTOS</p>
       <h1>Un lugar para cada proyecto</h1><p>Sus objetivos, su plan y los documentos que explican el trabajo.</p></header>
-    ${groups.map(group => `<section class="project-group"><h2>${esc(group)}</h2><div class="project-shelves">
-      ${projects.filter(p => p.lab === group).map(p => `<article class="project-bookmark">
+    ${groups.map(group => `<section class="project-group" data-live-key="${esc(group)}"><h2>${esc(group)}</h2><div class="project-shelves">
+      ${projects.filter(p => p.lab === group).map(p => `<article class="project-bookmark" data-live-key="${esc(p.name)}">
         <a class="project-title-link" href="${esc(projectRoute(p.name))}"><h3>${esc(p.name)}</h3></a>
         ${p.definition ? `<p class="project-intent">${inline(p.definition)}</p>` : ""}
         <div class="project-door-links"><a href="${esc(projectRoute(p.name))}">Objetivos</a>
           <a href="${esc(projectRoute(p.name, "plan"))}">Plan</a><a href="${esc(projectRoute(p.name, "files"))}">Archivos</a></div>
         <p class="project-source-facts">${p.ambiguous ? "El nombre corresponde a varios proyectos" : `${p.totalBlocks} bloques de plan · ${p.activeTasks.length} tareas activas`}</p>
       </article>`).join("")}</div></section>`).join("") || '<p>No hay proyectos declarados con este filtro.</p>'}
-  </section>`;
+  </section>`);
 }
 
 function renderLabSection(labName, projects) {
@@ -1478,7 +1519,7 @@ async function loadProjectResource(project, path = null) {
     cache[key] = { available: false, why: "No se pudo leer el documento. " + error.message };
   }
   if (cache === (path === null ? STATE.projectCatalogs : STATE.projectDocuments)
-      && STATE.currentView === "project-detail" && STATE.selectedProject === project) renderView();
+      && STATE.currentView === "project-detail" && STATE.selectedProject === project) renderView(true);
 }
 
 function selectedProjectFile(project, catalog) {
@@ -1536,9 +1577,9 @@ function projectNextLinks(project, doc) {
 function renderProjectDetailPage(container) {
   const project = STATE.projects.find(p => p.name === STATE.selectedProject);
   if (!project || project.ambiguous) {
-    container.innerHTML = `<section class="project-room"><a class="quiet-back" href="#/projects">← Proyectos</a>
+    paintView(container, `<section class="project-room"><a class="quiet-back" href="#/projects">← Proyectos</a>
       <h1>${project ? "Este nombre corresponde a varios proyectos" : "Proyecto no encontrado"}</h1>
-      <p>Vuelve a la lista para elegir un proyecto con sus propios documentos.</p></section>`;
+      <p>Vuelve a la lista para elegir un proyecto con sus propios documentos.</p></section>`);
     return;
   }
   const catalog = STATE.projectCatalogs?.[project.name];
@@ -1584,7 +1625,7 @@ function renderProjectDetailPage(container) {
         ${projectDocumentContent(doc)}
       </article></div>`;
   }
-  container.innerHTML = `<section class="project-room project-detail-room">
+  paintView(container, `<section class="project-room project-detail-room">
     <div class="project-sticky-nav">
       <div class="project-reading-header"><a class="quiet-back" href="#/projects">← Proyectos</a>
         <label>Cambiar proyecto<select aria-label="Cambiar proyecto" onchange="openProjectDetail(this.value)">
@@ -1597,7 +1638,7 @@ function renderProjectDetailPage(container) {
     </div>
     ${referenceLinks("project:"+project.name)}
     ${content}
-  </section>`;
+  </section>`);
   // The outline is tied to visible headings, not a guessed source summary.
   if (!doc?.objectives?.length && !doc?.blocks?.length) {
     container.querySelectorAll(".project-markdown h3, .project-markdown h4").forEach((heading, index) => {
@@ -2896,7 +2937,7 @@ if (document.readyState === "loading") {
   initAppListeners();
 }
 
-async function loadModel() {
+async function loadModel(background = false) {
   // ⛔ Fetch y render se atrapan POR SEPARADO. Juntos, un `ReferenceError` dentro de una
   // vista salía por pantalla como «No se pudo conectar con el servidor» — y con eso el
   // fallo real (`SKILL_ICONS is not defined`) mandaba a mirar la red, el adaptador y el
@@ -2904,10 +2945,11 @@ async function loadModel() {
   // más que no dar ninguno.
   let modelData;
   try {
-    const res = await fetch("/api/model");
+    const res = await fetch("/api/model" + (MODEL?.revision ? `?since=${encodeURIComponent(MODEL.revision)}` : ""));
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
     modelData = await res.json();
   } catch (err) {
+    if (background && STATE.loaded) throw err;
     STATE.error = `No se pudo conectar con el servidor: ${err.message}`;
     STATE.errorKind = "red";
     renderView();
@@ -2916,10 +2958,12 @@ async function loadModel() {
   try {
     STATE.error = null;
     STATE.errorKind = null;
-    ingestModel(modelData);
-    restoreRouteFromUrl();
-    renderView();
+    const result = LiveModel.apply(MODEL, modelData);
+    ingestModel(result.model, MODEL ? result.changed : null);
+    MODEL = result.model;
+    if (!background) { restoreRouteFromUrl(); renderView(); }
   } catch (err) {
+    if (background && STATE.loaded) { MODEL = null; throw err; }
     STATE.error = err.message;
     STATE.errorKind = "vista";
     STATE.errorWhere = STATE.currentView;
@@ -2931,8 +2975,9 @@ async function loadModel() {
   // volver a pedirlos en cada latido gastaría una petición por segundo para nada.
   if (STATE.doctrine === undefined) loadDoctrine();
   if (STATE.metrics === undefined) loadMetrics();
-  if (STATE.tree === undefined) loadTree();
+  if (STATE.tree === undefined && !background) await loadTree();
   loadRecent();
+  return true;
 }
 
 function referenceLinks(context, title='Guías y referencias') {
@@ -3081,13 +3126,13 @@ function renderNotebook(container) {
     body=`<div class="library-intro"><h2>Resultados para «${esc(loc.q)}»</h2><p>${matches.length} ${matches.length===1?'hoja':'hojas'}${results?.loading?' · buscando en el texto…':''}</p></div>${loc.q.length<2?'<p>Escribe al menos dos caracteres.</p>':''}${results?.error?`<p role="alert">No se ha podido buscar en el texto: ${esc(results.error)}.</p>`:''}${results?.capped?'<p>Hay más coincidencias. Afina el texto para encontrarlas.</p>':''}<div class="library-results">${matches.map(({file,hit})=>`<a href="${esc(Notebook.route({...loc,path:file.path,line:hit?.line||0}))}"><strong>${esc(Notebook.label(file,config))}</strong><small>${esc(file.path)}</small>${hit?`<p>${esc(hit.text)}</p>`:''}</a>`).join('')}</div>${!matches.length && !results?.loading?'<p>No se han encontrado hojas con ese texto.</p>':''}`;
   } else {
     const shown=groups.filter(g=>!loc.folder || g.path===loc.folder);
-    body=`<div class="notebook-groups">${shown.map(g=>`<section class="notebook-group"><header><div>${g.context?`<small>${esc(g.context)}</small>`:''}<h2>${esc(g.label)}</h2></div><span>${g.files.length} ${g.files.length===1?'hoja':'hojas'}</span></header>${g.description?`<p>${esc(g.description)}</p>`:''}<div>${g.files.map(f=>`<a class="notebook-sheet" href="${esc(Notebook.route({...loc,path:f.path}))}"><strong>${esc(Notebook.label(f,config))}</strong><span aria-hidden="true">↗</span></a>`).join('')}</div></section>`).join('')}</div>${!shown.length?'<p>No hay hojas en este grupo.</p>':''}`;
+    body=`<div class="notebook-groups">${shown.map(g=>`<section class="notebook-group" data-live-key="${esc(g.path)}"><header><div>${g.context?`<small>${esc(g.context)}</small>`:''}<h2>${esc(g.label)}</h2></div><span>${g.files.length} ${g.files.length===1?'hoja':'hojas'}</span></header>${g.description?`<p>${esc(g.description)}</p>`:''}<div>${g.files.map(f=>`<a data-live-key="${esc(f.path)}" class="notebook-sheet" href="${esc(Notebook.route({...loc,path:f.path}))}"><strong>${esc(Notebook.label(f,config))}</strong><span aria-hidden="true">↗</span></a>`).join('')}</div></section>`).join('')}</div>${!shown.length?'<p>No hay hojas en este grupo.</p>':''}`;
   }
-  container.innerHTML=`<section class="notebook-browser">${header}${referenceLinks("notebook")}${body}</section>`;
+  paintView(container, `<section class="notebook-browser">${header}${referenceLinks("notebook")}${body}</section>`);
   if(draft) {const input=container.querySelector('#notebook-query');input.value=draft.value;if(draft.focused){input.focus({preventScroll:true});input.setSelectionRange(draft.start,draft.end);}}
-  container.querySelectorAll('[data-reference]').forEach(link=>link.addEventListener('click',event=>{
+  container.querySelectorAll('[data-reference]').forEach(link=>link.onclick=event=>{
     event.preventDefault();const details=container.querySelector('#library-references');if(details){details.open=true;container.querySelector(`#library-reference-${link.dataset.reference}`)?.scrollIntoView({block:'center'});}
-  }));
+  });
   if(loc.path && note?.body!==undefined) enhanceLibraryDiagrams(container);
 }
 function restoreNotebookTarget(container, saved) {
@@ -3166,19 +3211,19 @@ function renderInbox(container) {
       <form class="mailbox-search" role="search" aria-label="Buscar asuntos" onsubmit="mailboxSearch(event)"><label for="mailbox-project">Proyecto<select id="mailbox-project" name="project" onchange="this.form.requestSubmit()"><option value="">Todos los proyectos</option>${projects.map(p=>`<option value="${esc(p)}" ${p===loc.project?'selected':''}>${esc(p)}</option>`).join('')}</select></label><label for="mailbox-query">Buscar en ${archiveView?'el archivo':'pendientes'}<input id="mailbox-query" type="search" name="query" placeholder="Título, texto o autor…" value="${esc(loc.q)}"></label><button type="submit">Buscar</button>${loc.q || loc.project ? mailboxLink('Quitar filtros',{view:loc.view}) : ''}</form>
       <div class="mailbox-list-heading"><h2>${archiveView?'Asuntos cerrados':'Por revisar'} <span>${shown.length}</span></h2><span>En el orden de la fuente</span></div>
       ${staleBanner(all, 'entradas')}
-      <div class="mailbox-list">${shown.length ? shown.map(e=>`<a class="mailbox-row" href="${esc(Mailbox.route({...base,id:e.id}))}"><div class="mailbox-meta"><span>${esc(e.project)}</span><span>${esc(e.date || 'Sin fecha')}</span>${e.state !== 'open' ? `<span>${esc(Mailbox.state(e).label)}</span>` : ''}</div><h3>${esc(e.title)}</h3><span class="mailbox-open">Leer asunto <span aria-hidden="true">→</span></span></a>`).join('') : `<div class="mailbox-empty"><h3>${loc.q || loc.project ? 'No hay asuntos con estos filtros' : archiveView ? 'El archivo está vacío' : 'No hay asuntos pendientes'}</h3><p>${loc.q || loc.project ? 'Prueba otro texto o consulta todos los proyectos.' : archiveView ? 'Aquí podrás consultar los asuntos resueltos y archivados.' : 'Puedes volver a la Oficina para continuar con tus tareas.'}</p></div>`}</div>`;
+      <div class="mailbox-list">${shown.length ? shown.map(e=>`<a class="mailbox-row" data-live-key="${esc(e.id)}" href="${esc(Mailbox.route({...base,id:e.id}))}"><div class="mailbox-meta"><span>${esc(e.project)}</span><span>${esc(e.date || 'Sin fecha')}</span>${e.state !== 'open' ? `<span>${esc(Mailbox.state(e).label)}</span>` : ''}</div><h3>${esc(e.title)}</h3><span class="mailbox-open">Leer asunto <span aria-hidden="true">→</span></span></a>`).join('') : `<div class="mailbox-empty"><h3>${loc.q || loc.project ? 'No hay asuntos con estos filtros' : archiveView ? 'El archivo está vacío' : 'No hay asuntos pendientes'}</h3><p>${loc.q || loc.project ? 'Prueba otro texto o consulta todos los proyectos.' : archiveView ? 'Aquí podrás consultar los asuntos resueltos y archivados.' : 'Puedes volver a la Oficina para continuar con tus tareas.'}</p></div>`}</div>`;
   }
-  container.innerHTML = `<section class="mailbox-room">${content}${referenceLinks('mailbox')}</section>`;
+  paintView(container, `<section class="mailbox-room">${content}${referenceLinks('mailbox')}</section>`);
   const restoredInput = container.querySelector('#mailbox-query');
   if (draft && restoredInput) {
     restoredInput.value = draft.value;
     if (draft.focused) { restoredInput.focus({preventScroll:true}); restoredInput.setSelectionRange(draft.start,draft.end); }
   }
-  container.querySelectorAll('.note-unresolved').forEach(link=>link.addEventListener('click',event=>{
+  container.querySelectorAll('.note-unresolved').forEach(link=>link.onclick=event=>{
     event.preventDefault();
     const details = container.querySelector('#mailbox-references');
     if (details) { details.open = true; container.querySelector(`#library-reference-${link.dataset.reference}`)?.scrollIntoView({block:'center'}); }
-  }));
+  });
   // Rare diagram entries share the same local reader as documents.
   enhanceLibraryDiagrams(container);
 }
@@ -3245,7 +3290,7 @@ function renderSkills(container) {
   const inStoa = k => all.filter(s => s.stoa === k && match(s));
 
   if (!all.length) {
-    container.innerHTML = `
+    paintView(container, `
       <div class="view-header"><div class="view-title-group">
         <h1><span>🏺</span> El Ágora</h1>
         <p class="view-subtitle">Las skills de la empresa, y los roles entre ellas.</p>
@@ -3254,11 +3299,11 @@ function renderSkills(container) {
         <h3>El ágora está vacía</h3>
         <p>Ninguna fuente del adaptador declara <code>kind: "skills"</code>, así que no hay
            descripciones que leer. Es un adaptador sin esa fuente, no una empresa sin skills.</p>
-      </div>`;
+      </div>`);
     return;
   }
 
-  container.innerHTML = `
+  paintView(container, `
     <div class="view-header">
       <div class="view-title-group">
         <h1><span>🏺</span> El Ágora</h1>
@@ -3345,7 +3390,7 @@ function renderSkills(container) {
               <div class="stoa-empty">Ninguna skill llega al modelo por esta vía${q ? " con esa búsqueda" : ""}.</div>`}
           </div>
         </section>`;
-    }).join("")}`;
+    }).join("")}`);
 }
 
 // Igual que `cut`, pero devuelve texto plano: va dentro de un atributo y de comillas.
@@ -3530,7 +3575,7 @@ function renderSkillPage(container) {
   const o = STATE.skillOpen || {};
   const meta = (STATE.skills || []).find(s => s.title === o.name);
   const st = STOAS[meta && STOAS[meta.trigger] ? meta.trigger : "unclear"];
-  container.innerHTML = `
+  paintView(container, `
     <div class="desk-plate clause-plate ${st.tone}">
       <button class="crumb-link" onclick="navigateTo('skills')">🏺 Ágora</button>
       <span class="crumb-sep">›</span>
@@ -3587,7 +3632,7 @@ function renderSkillPage(container) {
               </button>`).join("") || `<p class="rail-note" style="margin-top:0">Es la única.</p>`}
         </div>
       </aside>
-    </div>`;
+    </div>`);
 }
 
 window.toggleSibling = function (name) {
@@ -3705,23 +3750,25 @@ async function watchStamp() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     const newStamp = data.stamp;
-    if (STAMP !== null && newStamp !== STAMP) {
-      await loadTree();
-      await loadModel();
+    if (!STATE.loaded || newStamp !== STAMP) {
+      if (!(await loadModel(STATE.loaded))) throw new Error("Modelo no disponible");
+      await loadTree(false);
+      renderView(true);
+      // The model response owns the stamp: a later disk edit must trigger another pass.
+      STAMP = MODEL?.stamp ?? newStamp;
     }
-    STAMP = newStamp;
     const syncStatus = document.getElementById("syncStatus");
-    if (syncStatus) syncStatus.textContent = "2.0s";
+    if (syncStatus) { syncStatus.textContent = "Al día"; syncStatus.title = "Actualización automática cada 2 segundos"; }
   } catch {
     const syncStatus = document.getElementById("syncStatus");
-    if (syncStatus) syncStatus.textContent = "offline";
+    if (syncStatus) { syncStatus.textContent = "Sin conexión"; syncStatus.title = "Se conserva la última lectura; se reintentará automáticamente"; }
   } finally {
     isPolling = false;
   }
 }
 
 // Initial boot & periodic watcher
-loadModel().then(watchStamp);
+loadModel().then(() => { STAMP = MODEL?.stamp ?? null; return watchStamp(); });
 setInterval(watchStamp, 2000);
 
 
@@ -3841,7 +3888,7 @@ async function loadTaskSheet(card) {
     cache[card.id] = { available: false, why: "No se pudo leer la hoja. " + error.message };
   }
   if (STATE.taskSheets === cache && STATE.currentView === "desk" && STATE.deskCardId === card.id) {
-    renderView();
+    renderView(true);
   }
 }
 
@@ -3934,7 +3981,7 @@ function renderOffice(container) {
   const shown = pool.filter(c => fp === "ALL" || c.project === fp);
   const projects = [...new Set(all.map(c => c.project))].sort();
   const activeCount = live.filter(c => cardState(c) === "active").length;
-  container.innerHTML = `
+  paintView(container, `
     <section class="office-quiet">
       <header class="quiet-heading">
         <p class="quiet-eyebrow">OFICINA</p>
@@ -3956,21 +4003,21 @@ function renderOffice(container) {
       </div>
       ${referenceLinks("office","Cómo trabajar")}
       <div class="quiet-wall">
-        ${shown.length ? shown.map(c => `<a class="quiet-task" href="#/desk/${encodeURIComponent(c.id)}">
+        ${shown.length ? shown.map(c => `<a data-live-key="${esc(c.id)}" class="quiet-task" href="#/desk/${encodeURIComponent(c.id)}">
           <div class="quiet-task-meta"><span>${esc(c.project)}</span><span>${STATE_META[cardState(c)]?.label || esc(cardState(c))}</span></div>
           <h2>${inline(c.title)}</h2>
           ${c.serves ? `<p>${inline(c.serves)}</p>` : ""}
           <span class="quiet-task-open">Abrir tarea <span aria-hidden="true">→</span></span>
         </a>`).join("") : `<p class="quiet-empty">${fs === "active" ? "No hay tareas activas con este filtro." : "No hay tareas en este apartado."}</p>`}
       </div>
-    </section>`;
+    </section>`);
 }
 
 function renderDesk(container) {
   const card = officeCards().find(c => c.id === STATE.deskCardId);
   if (!card) {
-    container.innerHTML = `<section class="office-quiet"><a class="quiet-back" href="#/cockpit">← Volver al muro</a>
-      <h1>No se encuentra esta tarea</h1><p>El enlace ya no corresponde a una tarea del muro.</p></section>`;
+    paintView(container, `<section class="office-quiet"><a class="quiet-back" href="#/cockpit">← Volver al muro</a>
+      <h1>No se encuentra esta tarea</h1><p>El enlace ya no corresponde a una tarea del muro.</p></section>`);
     return;
   }
   const sheet = planForCard(card);
@@ -3979,16 +4026,22 @@ function renderDesk(container) {
   const remaining = items.filter(i => !i.struck && !i.outcome);
   const done = items.filter(i => i.struck || i.outcome);
   const paragraphs = (card.description || "").split(/\n\s*\n/).filter(Boolean);
+  const project = STATE.projects.find(p => p.name === card.project);
   const now = sheet?.current || paragraphs[0] || "Esta tarea no tiene una actividad actual descrita.";
   const list = entries => `<ol class="quiet-steps">${entries.map(i => `<li value="${Number(i.index) || 1}">
     ${inline(i.text)}${i.destination ? `<span class="quiet-outcome">${inline(i.destination)}</span>` : ""}</li>`).join("")}</ol>`;
-  container.innerHTML = `
+  paintView(container, `
     <article class="quiet-desk">
       <a class="quiet-back" href="#/cockpit">← Volver al muro</a>
       <header class="quiet-desk-heading">
         <p class="quiet-eyebrow">${esc(card.project)} <span>· ${STATE_META[cardState(card)]?.label || esc(cardState(card))}</span></p>
         <h1>${inline(card.title)}</h1>
         ${card.serves ? `<p class="quiet-purpose">${inline(card.serves)}</p>` : ""}
+        ${project ? `<nav class="project-door-links" aria-label="Documentos de este proyecto">
+          <a href="${esc(projectRoute(project.name, 'objectives'))}">Objetivos</a>
+          <a href="${esc(projectRoute(project.name, 'plan'))}">Plan</a>
+          <a href="${esc(projectRoute(project.name, 'files'))}">Archivos del proyecto</a>
+        </nav>` : ''}
       </header>
       <section class="quiet-now" aria-label="Actividad actual">
         <h2>${cardState(card) === "active" ? "Ahora" : "Situación"}</h2>
@@ -4016,7 +4069,7 @@ function renderDesk(container) {
             <div class="md-body">${renderMarkdownBody(sheet.body)}</div></details>` : ""}
         </details>
       </div>
-    </article>`;
+    </article>`);
 }
 
 // ───────────────────────────────────────────────── acciones de la oficina
@@ -4069,13 +4122,33 @@ async function loadRecent() {
 // desde antes. **El trabajo es una vista, no un parser**: esto pide el JSON y no recalcula
 // nada, porque dos cosas que cuentan lo mismo acaban discrepando (`Aevifex:AX-20`).
 // ⚠️ Se carga una vez, como la doctrina: el script barre el árbol y no es estado vivo.
-// ⛔ El árbol se pide UNA vez y son metadatos: 326 filas sin un solo cuerpo. Los cuerpos
-// se piden al abrir, y sólo el que se abre — meter el vault en `/api/model`, que ya pesa
-// 1,8 MB, convertiría un problema conocido (`I1.5`) en uno inmanejable.
-async function loadTree() {
+// The tree carries document metadata; bodies are loaded only when opened.
+function invalidateReaders(previous, next) {
+  const files = tree => new Map((tree?.files || []).map(f => [`${f.root}/${f.path}`.replace(/^(?:\.\/)+/, ""), f.version]));
+  const old = files(previous), fresh = files(next);
+  const changed = new Set([...old.keys(), ...fresh.keys()].filter(path => old.get(path) !== fresh.get(path)));
+  for (const sheet of Object.values(STATE.taskSheets || {})) {
+    if (!sheet.path || changed.has(sheet.path)) sheet.stale = true;
+  }
+  for (const project of STATE.projects) {
+    const prefix = project.projectRoot + '/';
+    if ([...changed].some(path => path.startsWith(prefix))) {
+      const catalog = STATE.projectCatalogs?.[project.name];
+      if (catalog) catalog.stale = true;
+    }
+  }
+  for (const [key, doc] of Object.entries(STATE.projectDocuments || {})) {
+    const [name, path] = JSON.parse(key);
+    const project = STATE.projects.find(p => p.name === name);
+    if (!project || changed.has(`${project.projectRoot}/${path}`)) doc.stale = true;
+  }
+}
+
+async function loadTree(render = true) {
   try {
     const tree = await api("GET", "/api/tree");
     if (JSON.stringify(tree) !== JSON.stringify(STATE.tree)) {
+      invalidateReaders(STATE.tree, tree);
       STATE.tree = tree; STATE.libraryRevision = (STATE.libraryRevision || 0) + 1;
       for (const [key, note] of Object.entries(STATE.notes || {})) {
         const file = tree.files?.find(f => Library.key(f) === key);
@@ -4089,20 +4162,20 @@ async function loadTree() {
       }
       if (STATE.searchQ) loadSearch(STATE.searchQ);
     }
-  } catch (e) { if (!STATE.tree) STATE.tree = {available:false, why:e.message}; }
-  updateHUD(); renderView();
+  } catch (e) { if (!render) throw e; if (!STATE.tree) STATE.tree = {available:false, why:e.message}; }
+  updateHUD(); if (render) renderView(true);
 }
 async function loadNote(root, path, retry = false) {
   const key = Library.key({root,path}); STATE.notes ||= {};
   const old = STATE.notes[key];
   if (old?.loading || (old && !old.stale && !retry)) return;
   const version = STATE.tree?.files?.find(f => Library.key(f) === key)?.version;
-  STATE.notes[key] = {...old, loading:true, stale:false}; renderView();
+  STATE.notes[key] = {...old, loading:true, stale:false}; renderView(true);
   try {
     const d = await api("GET", `/api/file?root=${encodeURIComponent(root)}&path=${encodeURIComponent(path)}`);
     STATE.notes[key] = d.available ? {body:d.body, version} : {...old, version, error:d.why || "No se pudo leer", loading:false, stale:false};
   } catch (e) { STATE.notes[key] = {...old, version, error:e.message, loading:false, stale:false}; }
-  renderView();
+  renderView(true);
 }
 let librarySearchRequest = 0;
 async function loadSearch(q) {
@@ -4264,10 +4337,10 @@ function renderPediment() {
 function renderClause(container) {
   const c = clauseOf(STATE.clauseId);
   if (!c) {
-    container.innerHTML = `<div class="empty-state"><div class="empty-icon">🏛️</div>
+    paintView(container, `<div class="empty-state"><div class="empty-icon">🏛️</div>
       <h3>Cláusula no encontrada</h3>
       <p>${esc(STATE.clauseId || "")} no está en <code>PHILOSOPHY.md</code>.</p>
-      <button class="btn-retry" onclick="navigateTo('overview')">Volver a la portada</button></div>`;
+      <button class="btn-retry" onclick="navigateTo('overview')">Volver a la portada</button></div>`);
     return;
   }
   const tone = CLAUSE_TONE[c.id] || "";
@@ -4277,7 +4350,7 @@ function renderClause(container) {
   const byCheck = s => ax.filter(a => a.check_state === s);
   const others = D().clauses.filter(x => !x.objective && x.id !== c.id);
 
-  container.innerHTML = `
+  paintView(container, `
     <div class="desk-plate clause-plate ${tone}">
       <button class="crumb-link" onclick="navigateTo('overview')">🏛️ Portada</button>
       <span class="crumb-sep">›</span>
@@ -4357,7 +4430,7 @@ function renderClause(container) {
              cada proyecto, con su propio auditor.</p>
         </div>
       </aside>
-    </div>`;
+    </div>`);
 }
 
 function renderAxiomRow(a, highlightClause) {
@@ -4594,14 +4667,14 @@ function renderRefusals() {
 function renderDoc(container) {
   const d = D().docs.find(x => x.id === STATE.docId);
   if (!d) {
-    container.innerHTML = `<div class="empty-state"><div class="empty-icon">📄</div>
+    paintView(container, `<div class="empty-state"><div class="empty-icon">📄</div>
       <h3>Documento no cargado</h3>
       <p>${esc(STATE.docId || "")} no está en la raíz del motor.</p>
-      <button class="btn-retry" onclick="navigateTo('overview')">Volver a la portada</button></div>`;
+      <button class="btn-retry" onclick="navigateTo('overview')">Volver a la portada</button></div>`);
     return;
   }
   const meta = DOC_META[d.id] || {};
-  container.innerHTML = `
+  paintView(container, `
     <div class="desk-plate clause-plate ${meta.tone || ""}">
       <button class="crumb-link" onclick="navigateTo('overview')">🏛️ Portada</button>
       <span class="crumb-sep">›</span>
@@ -4642,7 +4715,7 @@ function renderDoc(container) {
             </button>`).join("")}
         </div>
       </aside>
-    </div>`;
+    </div>`);
 }
 
 window.scrollToHeading = function (i) {
@@ -4868,16 +4941,16 @@ function renderLibrary(container) {
     <div class="library-sections">${sections.map(s => {
       const fs = libFiles(s.root), group = Library.groups(fs, s.root);
       const preview = group.folders.map(f => folderLabel(f.name)).slice(0, 3).join(' · ');
-      return `<a class="library-section" href="${esc(Library.route({root:s.root}))}"><span class="library-section-count">${fs.length} ${fs.length === 1 ? "documento" : "documentos"}</span><h2>${esc(s.label)}</h2><p>${esc(preview || fs.slice(0, 2).map(Library.title).join(' · '))}</p><span class="library-section-open">Explorar →</span></a>`;
+      return `<a data-live-key="${esc(s.root)}" class="library-section" href="${esc(Library.route({root:s.root}))}"><span class="library-section-count">${fs.length} ${fs.length === 1 ? "documento" : "documentos"}</span><h2>${esc(s.label)}</h2><p>${esc(preview || fs.slice(0, 2).map(Library.title).join(' · '))}</p><span class="library-section-open">Explorar →</span></a>`;
     }).join('')}</div>${sections.length ? '' : '<p>No hay secciones de biblioteca declaradas en el adaptador.</p>'}`;
-  container.innerHTML = `<div class="library-browser">${header}${body}</div>`;
+  paintView(container, `<div class="library-browser">${header}${body}</div>`);
   if (loc.path && note?.body !== undefined) {
-    container.querySelectorAll('[data-reference]').forEach(link => link.addEventListener('click', event => {
+    container.querySelectorAll('[data-reference]').forEach(link => link.onclick = event => {
       event.preventDefault();
       const panel = document.getElementById('library-references');
       if (panel) panel.open = true;
       document.getElementById('library-reference-' + link.dataset.reference)?.scrollIntoView({block:'center'});
-    }));
+    });
     enhanceLibraryDiagrams(container);
   }
 }
@@ -4887,7 +4960,7 @@ function renderShelf(root) {
   return `${libraryBreadcrumb(root, folder)}<div class="library-intro"><h2>${esc(folder ? folderLabel(folder.split('/').pop()) : sectionLabel(root))}</h2><p>${folders.length ? 'Elige un tema para ver sus documentos.' : `${docs.length} documentos en este tema.`}</p></div>
     ${folders.length ? `<div class="library-subjects">${folders.map(f => `<a href="${esc(Library.route({root, folder:f.path}))}"><strong>${esc(folderLabel(f.name))}</strong><span>${f.count} ${f.count === 1 ? "documento" : "documentos"} →</span></a>`).join('')}</div>` : ''}
     ${docs.length ? `<div class="library-list-heading"><h3>${folders.length ? 'Documentos generales de la sección' : 'Documentos'}</h3><div role="group" aria-label="Presentación de documentos"><button aria-pressed="${layout === 'list'}" onclick="libraryLayout('list')">Lista</button><button aria-pressed="${layout === 'books'}" onclick="libraryLayout('books')">Lomos</button></div></div>
-    ${layout === 'books' ? `<div class="shelf"><div class="shelf-books">${docs.slice(0, limit).map(f => book(root, f)).join('')}</div><div class="shelf-plank"></div></div>` : `<div class="library-documents">${docs.slice(0, limit).map(f => `<a class="library-document" href="${esc(Library.route({root, path:f.path}))}"><span class="library-document-spine" aria-hidden="true" style="width:${Math.min(18, 5 + Math.sqrt(f.bytes / 1024))}px"></span><span><strong>${esc(Library.title(f))}</strong><small>${esc(f.path.split('/').pop())} · ${Math.max(1, Math.round(f.bytes / 1024))} KB</small></span><span aria-hidden="true">↗</span></a>`).join('')}</div>`}
+    ${layout === 'books' ? `<div class="shelf"><div class="shelf-books">${docs.slice(0, limit).map(f => book(root, f)).join('')}</div><div class="shelf-plank"></div></div>` : `<div class="library-documents">${docs.slice(0, limit).map(f => `<a data-live-key="${esc(f.path)}" class="library-document" href="${esc(Library.route({root, path:f.path}))}"><span class="library-document-spine" aria-hidden="true" style="width:${Math.min(18, 5 + Math.sqrt(f.bytes / 1024))}px"></span><span><strong>${esc(Library.title(f))}</strong><small>${esc(f.path.split('/').pop())} · ${Math.max(1, Math.round(f.bytes / 1024))} KB</small></span><span aria-hidden="true">↗</span></a>`).join('')}</div>`}
     ${docs.length > limit ? `<button class="library-more" onclick="libraryMore()">Mostrar más (${docs.length - limit} restantes)</button>` : ''}` : !folders.length ? '<p>No hay documentos en esta ubicación.</p>' : ''}`;
 }
 function renderSearchHits() {
@@ -4929,7 +5002,7 @@ let mermaidLoader;
 const libraryDiagramCache = new Map();
 let diagramSequence = 0;
 async function enhanceLibraryDiagrams(container) {
-  const figures = [...container.querySelectorAll('.note-diagram')];
+  const figures = [...container.querySelectorAll('.note-diagram')].filter(figure => !figure.querySelector('.diagram-output[aria-busy="false"]'));
   if (!figures.length) return;
   const location = STATE.currentView === 'notebook' ? notebookLocation() : libraryLocation();
   const readingRoute = STATE.currentView === 'notebook' ? Notebook.route({...location,anchor:''}) : STATE.currentView === "inbox" ? Mailbox.route(mailboxLocation()) : Library.route({...location, anchor:""});
@@ -5092,7 +5165,7 @@ function renderDashboard(container) {
   const probs = (STATE.problems || []).length;
   const covMismatch = rows.filter(r => r.cov && r.cov.count !== String(r.total));
 
-  container.innerHTML = `
+  paintView(container, `
     <div class="view-header">
       <div class="view-title-group">
         <h1><span>📐</span> Dashboard <span class="clause-chip tone-cyan" onclick="openClause('PH-6')">PH-6 · Measurement</span></h1>
@@ -5230,7 +5303,7 @@ function renderDashboard(container) {
           entra aquí; hasta entonces vive en la lista de arriba.
         </div>
       </div>
-    </section>`;
+    </section>`);
 }
 
 

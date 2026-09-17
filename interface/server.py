@@ -33,6 +33,7 @@ UI = HERE / "ui"
 sys.path.insert(0, str(HERE / "model"))
 try:
     import parse as model
+    from live import Revisions
 except Exception as e:                       # the engine can serve a page without a
     model = None                             # model; it must never invent one
     _MODEL_ERROR = e
@@ -462,7 +463,8 @@ def stamp(adapter):
     """Cheap change token for live sync polling."""
     if not adapter.get("sources") and not adapter.get("browse"):
         return "standalone"
-    bits = []
+    parser = HERE / "model" / "parse.py"
+    bits = [str(parser.stat().st_mtime_ns)]
     for spec in adapter.get("sources", []):
         target_root = adapter["root"]
         if spec.get("root"):
@@ -470,11 +472,11 @@ def stamp(adapter):
         if spec.get("path"):
             f = target_root / spec["path"]
             if f.is_file():
-                bits.append(f"{f}:{f.stat().st_mtime}")
+                bits.append(f"{f}:{f.stat().st_mtime_ns}:{f.stat().st_size}")
         elif spec.get("glob"):
             for f in sorted(target_root.glob(spec["glob"])):
                 if f.is_file():
-                    bits.append(f"{f}:{f.stat().st_mtime}")
+                    bits.append(f"{f}:{f.stat().st_mtime_ns}:{f.stat().st_size}")
     for directory in _browse_roots(adapter):
         for path, real in _walk(directory):
             stat = real.stat()
@@ -587,14 +589,10 @@ def one_skill(adapter, name):
 
 
 def make_handler(adapter):
+    revisions = Revisions() if model else None
+
     class Handler(http.server.BaseHTTPRequestHandler):
-        # ⚠️ Comprimir NO es `interface:I1.5`, y no hay que confundirlo con haberlo hecho.
-        # `I1.5` es que el cliente deje de reconstruir cada fila en cada cambio; esto sólo
-        # reduce lo que viaja. Medido 2026-09-06 sobre un centro real: `/api/model` pesa
-        # **1,86 MB** y **476 KB** comprimido — un 74 % menos por una rama de stdlib, y el
-        # navegador ya pide `gzip` sin que nadie toque el cliente. La cota de `I1.5` sigue
-        # siendo la que dice el plan; lo que baja aquí es el coste de cada latido hasta ahí.
-        # ⛔ Con umbral: comprimir 200 bytes gasta más CPU de la que ahorra en red.
+        # Compress large initial snapshots; later requests carry entity deltas.
         GZIP_MIN = 4096
 
         def _send(self, code, body, ctype="application/json"):
@@ -632,16 +630,26 @@ def make_handler(adapter):
                 else:
                     self._send(404, "index.html not found", "text/plain")
             elif path == "/api/model":
+                params = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
                 if model and adapter.get("path"):
                     try:
-                        # Re-read from disk like everything else here does. Imported
-                        # once at startup, an edited parser served a stale answer with
-                        # nothing saying anything was wrong.
-                        globals()['model'] = importlib.reload(model)
-                        parsed = model.parse_adapter(adapter["path"])
-                        self._send(200, parsed)
+                        current_stamp = stamp(adapter)
+                        if revisions.stamp != current_stamp:
+                            # Do not publish a revision labelled with a newer file state.
+                            for attempt in range(3):
+                                globals()['model'] = importlib.reload(model)
+                                parsed = model.parse_adapter(adapter["path"])
+                                after = stamp(adapter)
+                                if after == current_stamp:
+                                    revisions.publish(parsed, after)
+                                    break
+                                current_stamp = after
+                            else:
+                                raise RuntimeError("Las fuentes están cambiando; se reintentará la sincronización.")
+                        self._send(200, revisions.response(params.get("since", [None])[0]))
                     except Exception as e:
-                        self._send(200, {"entities": [], "problems": [{"why": str(e)}]})
+                        # Keep the last good client state and retry, never publish an empty model.
+                        self._send(503, {"error": str(e)})
                 else:
                     self._send(200, {"entities": [], "standalone": True})
             elif path == "/api/skill":
